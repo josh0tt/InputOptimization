@@ -1,10 +1,5 @@
-using JuMP, MosekTools, LinearAlgebra, StatsBase, Gurobi, Interpolations, LaTeXStrings, Distributions
-
 function run_f16_waypoint_sim()
     pushfirst!(PyVector(pyimport("sys")."path"), "")
-    # pyimport("aerobench.run_f16_sim")
-    # pyimport("aerobench.visualize")
-    # pyimport("aerobench.examples.waypoint.waypoint_autopilot")
 
     py"""
     import math
@@ -140,162 +135,77 @@ function estimate_linear_system(Z::Matrix{Float64}, n::Int64)
     return A, B
 end
 
-function build_model(safe_bounds::Matrix{Float64}, Z_t::Matrix{Float64}, A_hat::Matrix{Float64}, B_hat::Matrix{Float64}, n::Int64, m::Int64, t::Int64, T::Int64, Z_cur::Matrix{Float64}, Sigma_0_inv::Matrix{Float64}, scaler::UnitRangeTransform{Float64,Vector{Float64}}, delta_max::Float64, method::String)
-    if method == "exact"
-        model = Model(Mosek.Optimizer)
-        @variable(model, Y[1:n+m, 1:n+m], PSD)
-    else
-        model = Model(Gurobi.Optimizer)
+"""
+    problem_setup()
+
+This function sets up the problem for input optimization. It performs the following steps:
+
+1. Run F16 waypoint simulation to collect a data set.
+2. Scale the data using a unit range transform.
+3. Estimate the linear system using the scaled data.
+4. Create an `InputOptimizationProblem` object.
+
+The function returns the `InputOptimizationProblem` object.
+
+# Arguments
+- None
+
+# Returns
+- `problem`: An `InputOptimizationProblem` object representing the input optimization problem.
+
+"""
+function problem_setup()
+    safe_bounds = [
+        300 2500; # vt ft/s
+        deg2rad(-10) deg2rad(45); # alpha
+        deg2rad(-30) deg2rad(30); # beta 
+        deg2rad(-90) deg2rad(90); # phi
+        deg2rad(-30) deg2rad(30); # theta
+        deg2rad(-180) deg2rad(180); # psi
+        deg2rad(-180) deg2rad(180); # P
+        deg2rad(-180) deg2rad(180); # Q
+        deg2rad(-180) deg2rad(180); # R
+        -Inf Inf; # pn ft
+        -Inf Inf; # pe ft
+        1000 50000; # h ft
+        0 100; # pow
+        0 1; # throt
+        deg2rad(-10) deg2rad(10); # ele
+        deg2rad(-15) deg2rad(15); # ail
+        deg2rad(-10) deg2rad(10) # rud
+    ] 
+
+
+    # 1. run F16 waypoint simulation to collect data set 
+    times, states, controls = run_f16_waypoint_sim()
+    n, m = size(states, 2), size(controls, 2)
+    t = length(times)
+    Δt = times[2] - times[1]
+    @show Δt
+    t_horizon = round(Int64, 25 / Δt)
+    @show t_horizon
+
+
+    # 2. scale the data
+    Z_unscaled = hcat(states, controls)' # Z is shaped as (n+m,t) where n is the number of states and m is the number of controls
+    scaler = fit(UnitRangeTransform, Z_unscaled, dims=2)
+    Z = StatsBase.transform(scaler, Z_unscaled)
+
+    # scale the bounds as well
+    lower_bounds, upper_bounds = scale_bounds(scaler, safe_bounds, 1, n + m)
+
+    new_safe_bounds = zeros(size(safe_bounds))
+    for i in 1:size(safe_bounds, 1)
+        new_safe_bounds[i, 1] = lower_bounds[i]
+        new_safe_bounds[i, 2] = upper_bounds[i]
     end
+    safe_bounds = new_safe_bounds
 
-    @variable(model, Z_ctrl[1:n+m, 1:T-t])
+    # 3. estimate the linear system
+    A_hat, B_hat = estimate_linear_system(Z, n)
 
-    Z = [Z_t Z_ctrl]
-    Z_diff = Z - Z_cur
-    Z_diff_transpose = Z_diff'
-    W_hat = Z_cur * Z_cur' + Z_cur * Z_diff_transpose + Z_diff * Z_cur' + Sigma_0_inv
+    # 4. create the InputOptimizationProblem
+    problem = InputOptimizationProblem(Z, scaler, times, A_hat, B_hat, n, m, t, t_horizon, Δt, safe_bounds, ["vt", "alpha", "beta", "phi", "theta", "psi", "P", "Q", "R", "pn", "pe", "h", "pow", "throt", "ele", "ail", "rud"])
 
-    if method == "exact"
-        @objective(model, Min, tr(Y))
-        @constraint(model, [Y Diagonal(ones(n + m)); Diagonal(ones(n + m)) W_hat] >= 0, PSDCone())
-    else
-        @objective(model, Min, -tr(W_hat))
-    end
-
-    # Constraints
-    # Initial Z matching
-    @constraint(model, Z[:, 1:t] .== Z_t[:, 1:t])
-
-    # Dynamics and control constraints
-    for i in t:T-1
-        @constraint(model, Z[1:n, i+1] .== A_hat * Z[1:n, i] + B_hat * Z[n+1:end, i]) # Dynamics
-        # @constraint(model, Z[n+1:end, i] - Z[n+1:end, i+1] .<= delta_max) # Control variation
-        # @constraint(model, Z[n+1:end, i+1] - Z[n+1:end, i] .<= delta_max)
-    end
-
-    upper_bounds = safe_bounds[:, 2]
-    lower_bounds = safe_bounds[:, 1]
-    valid_bounds = .!isinf.(upper_bounds)
-    @constraint(model, lower_bounds[valid_bounds] .<= Z[valid_bounds, t+1:T])
-    @constraint(model, Z[valid_bounds, t+1:T] .<= upper_bounds[valid_bounds])
-
-
-    # add constraint that we want to end up with zero roll, pitch, and yaw
-    desired_end_state = zeros(n + m, 1)
-    desired_end_state = StatsBase.transform(scaler, desired_end_state)
-    println("Desired end state: ", desired_end_state)
-    @constraint(model, Z[4:6, T] .== desired_end_state[4:6])
-
-    return model
+    return problem
 end
-
-function plan_control_inputs(problem::InputOptimizationProblem, method::String="approx")
-    plan_time = time()
-
-    safe_bounds = problem.safe_bounds
-    times = problem.times
-    Z_t = problem.Z
-    scaler = problem.scaler
-    A_hat = problem.A_hat
-    B_hat = problem.B_hat
-    n = problem.n
-    m = problem.m
-    t = problem.t
-    t_horizon = problem.t_horizon
-    
-    T = t + t_horizon
-
-    Sigma_0_inv = diagm(0 => ones(n + m)) # Assuming Sigma_0_inv is defined elsewhere
-    # Z_cur = [Z_t Z_t[:, end] .+ zeros(n+m, t_horizon)]
-    Z_cur = [Z_t Z_t[:, end] .+ rand(Normal(0, 1.0), n + m, t_horizon)]
-    max_iter = 10
-    delta_max = 1.0
-    tol = 1e-3
-    obj = Inf
-    values = Float64[]
-    W_hat = Nothing
-    Z = Nothing
-    Z_ctrl_val = Nothing
-
-    build_time = time()
-    model = build_model(safe_bounds, Z_t, A_hat, B_hat, n, m, t, T, Z_cur, Sigma_0_inv, scaler, delta_max, method)
-    build_end_time = time()
-    println("Time spent in build_model: ", build_end_time - build_time)
-
-    for iter in 1:max_iter
-        println("#"^30)
-        println("Iteration $iter/$max_iter")
-        println("#"^30)
-
-        # Solve the problem
-        JuMP.optimize!(model)
-
-        # Check solver status and update Z_cur if feasible
-        println("Solver status: ", termination_status(model))
-        if termination_status(model) == MOI.INFEASIBLE_OR_UNBOUNDED
-            println("Infeasible problem. Stabilizing aircraft...")
-            @warn("Infeasible problem. Stabilizing aircraft...")
-            # stable_control_traj = stabilize_aircraft(safe_bounds, times, Z_t, scaler, start_time, t0, t_horizon, n, m, t, A_hat, B_hat, delta_max)
-            # Z_ctrl_val = zeros(n + m, t_horizon)
-            # Z_ctrl_val[n+1:end, :] .= stable_control_traj
-            # unscaled_Z_ctrl = StatsBase.reconstruct(scaler, Z_ctrl_val)
-            # control_traj = unscaled_Z_ctrl[n+1:end, :]'
-
-            # return control_traj, zeros(n + m, T), execution_times, true
-        end
-
-        # Check solver status and update Z_cur if feasible
-        current_obj = objective_value(model)
-        push!(values, current_obj)
-
-        Z_ctrl_val = value.(model[:Z_ctrl])
-        Z_cur = [Z_t Z_ctrl_val]
-        Z = [Z_t model[:Z_ctrl]]
-
-        # Update W_hat for model objective 
-        Z_diff = Z - Z_cur
-        Z_diff_transpose = Z_diff'
-        W_hat = Z_cur * Z_cur' + Z_cur * Z_diff_transpose + Z_diff * Z_cur' + Sigma_0_inv
-        set_objective_function(model, -tr(W_hat))
-
-
-        # Convergence check
-        if abs(obj - current_obj) < tol
-            println("Converged after $iter iterations")
-            break
-        end
-        obj = current_obj
-
-    end
-
-    unscaled_Z_ctrl = StatsBase.reconstruct(scaler, Z_ctrl_val)
-    control_traj = unscaled_Z_ctrl[n+1:end, :]'
-
-    end_time = time()
-    println("Time spent in plan_control_inputs: ", end_time - plan_time)
-    return control_traj, Z_cur, false
-end
-
-# plts = []
-# labels = ["vt", "alpha", "beta", "phi", "theta", "psi", "P", "Q", "R", "pn", "pe", "h", "pow"]
-# for i in 1:length(labels)
-#     if i in collect(2:9)
-#         # convert rad to deg
-#         plt = plot(times, rad2deg(Z_unscaled[i, :]), label=labels[i])
-#     else
-#         plt = plot(times, Z_unscaled[i, :], label=labels[i])
-#     end
-#     push!(plts, plt)
-# end
-# plt = plot(plts..., layout=(7, 2), size=(800, 800), margin=5mm)
-# savefig("/Users/joshuaott/Downloads/plot.pdf")
-
-# # plot controls 
-# plts = []
-# labels = ["throt", "ele", "ail", "rud"]
-# for i in 17:20
-#     plt = plot(times, Z_unscaled[i, :], label=labels[i-16])
-#     push!(plts, plt)
-# end
-# plt = plot(plts..., layout=(4, 1), size=(800, 800), margin=5mm)
-# savefig("/Users/joshuaott/Downloads/plot_controls.pdf")

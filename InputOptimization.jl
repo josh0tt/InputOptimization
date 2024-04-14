@@ -4,8 +4,6 @@ using StatsBase
 using Plots
 using Measures
 
-
-
 abstract type SolutionMethod end
 struct ConvexConcave <: SolutionMethod end
 struct OrthogonalMultisine <: SolutionMethod end
@@ -26,70 +24,26 @@ struct OrthogonalMultisine <: SolutionMethod end
 end
 
 include("setup.jl")
-
-function problem_setup()
-    safe_bounds = [
-        300 2500; # vt ft/s
-        deg2rad(-10) deg2rad(45); # alpha
-        deg2rad(-30) deg2rad(30); # beta 
-        deg2rad(-90) deg2rad(90); # phi
-        deg2rad(-30) deg2rad(30); # theta
-        deg2rad(-180) deg2rad(180); # psi
-        deg2rad(-180) deg2rad(180); # P
-        deg2rad(-180) deg2rad(180); # Q
-        deg2rad(-180) deg2rad(180); # R
-        -Inf Inf; # pn ft
-        -Inf Inf; # pe ft
-        1000 50000; # h ft
-        0 100; # pow
-        0 1; # throt
-        deg2rad(-10) deg2rad(10); # ele
-        deg2rad(-15) deg2rad(15); # ail
-        deg2rad(-10) deg2rad(10) # rud
-    ] 
-
-
-    # 1. run F16 waypoint simulation to collect data set 
-    times, states, controls = run_f16_waypoint_sim()
-    n, m = size(states, 2), size(controls, 2)
-    t = length(times)
-    Δt = times[2] - times[1]
-    @show Δt
-    t_horizon = round(Int64, 25 / Δt)
-    @show t_horizon
-
-
-    # 2. scale the data
-    Z_unscaled = hcat(states, controls)' # Z is shaped as (n+m,t) where n is the number of states and m is the number of controls
-    scaler = fit(UnitRangeTransform, Z_unscaled, dims=2)
-    Z = StatsBase.transform(scaler, Z_unscaled)
-
-    # scale the bounds as well
-    lower_bounds, upper_bounds = scale_bounds(scaler, safe_bounds, 1, n + m)
-
-    new_safe_bounds = zeros(size(safe_bounds))
-    for i in 1:size(safe_bounds, 1)
-        new_safe_bounds[i, 1] = lower_bounds[i]
-        new_safe_bounds[i, 2] = upper_bounds[i]
-    end
-    safe_bounds = new_safe_bounds
-
-    # 3. estimate the linear system
-    A_hat, B_hat = estimate_linear_system(Z, n)
-
-    # 4. create the InputOptimizationProblem
-    problem = InputOptimizationProblem(Z, scaler, times, A_hat, B_hat, n, m, t, t_horizon, Δt, safe_bounds, ["vt", "alpha", "beta", "phi", "theta", "psi", "P", "Q", "R", "pn", "pe", "h", "pow", "throt", "ele", "ail", "rud"])
-
-    return problem
-end
+include("convex_concave.jl")
+include("plotting.jl")
 
 function solve(problem::InputOptimizationProblem, method::ConvexConcave)
-    println("Solving ConvexConcaveProblem")
+    println("Solving with Convex Concave")
 
     control_traj, Z_planned, infeasible_flag = plan_control_inputs(problem)
 
     return control_traj, Z_planned, infeasible_flag
 end
 
+function solve(problem::InputOptimizationProblem, method::OrthogonalMultisine)
+    println("Solving with Orthogonal Multisine")
+
+    times, states, controls = run_orthogonal_multisines(problem.times, problem.t_horizon, problem.t, problem.Z[1:problem.t, problem.n+1:end], problem.t_horizon, problem.m)
+
+    return times, states, controls
+end
+
 problem = problem_setup()
-solve(problem, ConvexConcave())
+control_traj, Z_planned, infeasible_flag = solve(problem, ConvexConcave())
+
+plot(problem, Z_planned)
