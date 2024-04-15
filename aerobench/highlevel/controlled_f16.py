@@ -28,13 +28,15 @@ def controlled_f16(t, x_f16, u_ref, llc, u_seq, step, f16_model='morelli', v2_in
     # print("t: ", t)
 
     t_idx = int(t / step)
-
     throttle = u_seq[t_idx, 0]
     elevator = u_seq[t_idx, 1]
     aileron = u_seq[t_idx, 2]
     rudder = u_seq[t_idx, 3]
-    
-    u_deg += np.array([throttle, elevator, aileron, rudder])
+
+    # check is u_seq is not all 0s
+    if np.any(u_seq[t_idx, :]):
+        u_deg = np.array([throttle, elevator, aileron, rudder])    
+        # u_deg += np.array([throttle, elevator, aileron, rudder])
 
     # print("u_ctrl after: ", u_deg)
     # Note: Control vector (u) for subF16 is in units of degrees

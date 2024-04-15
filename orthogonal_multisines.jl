@@ -8,9 +8,8 @@ function rms(x)
     return sqrt(mean(x .^ 2))
 end
 
-function generateSignal(ts::Vector{Float64}, n_i::Int64, M::Int64, T::Float64, A::Vector{Float64}, phi::Matrix{Float64}, ωs::Matrix{Float64}, P::Matrix{Float64})
-    n_t = length(ts)
-    U = zeros(Float64, n_t, n_i)
+function generateSignal(ts::Vector{Float64}, n_i::Int64, t_horizon::Int64, M::Int64, A::Vector{Float64}, phi::Matrix{Float64}, ωs::Matrix{Float64}, P::Matrix{Float64})
+    U = zeros(Float64, t_horizon, n_i)
     for j = 1:n_i
         A_j = A[j]
         U[:, j] = sum(A_j * sqrt(P[j,k]) * sin.(ωs[j, k] * ts .+ phi[j, k]) for k = 1:M)
@@ -30,7 +29,7 @@ function objectiveFunction(x::Vector, grad::Vector, data::Tuple{Int64, Int64, In
     return cost
 end
 
-function optimizeWithSQP(x0::Vector{Float64}, lb::Vector{Float64}, ub::Vector{Float64}, data::Tuple{Int64, Int64, Int64, Vector{Float64}, Float64, Matrix{Float64}, Matrix{Float64}})
+function optimize_signal(x0::Vector{Float64}, lb::Vector{Float64}, ub::Vector{Float64}, data::Tuple{Int64, Int64, Int64, Vector{Float64}, Float64, Matrix{Float64}, Matrix{Float64}})
     # opt = Opt(:LD_SLSQP, length(x0))
     opt = Opt(:LN_NELDERMEAD, length(x0))
     opt.lower_bounds = lb
@@ -46,16 +45,15 @@ function optimizeWithSQP(x0::Vector{Float64}, lb::Vector{Float64}, ub::Vector{Fl
     return x_opt, minf, ret
 end
 
-function findTimeShift(U, ts)
-    taus = zeros(size(U,2))
-    for j in 1:size(U,2)
-        for i in 2:length(ts)
-            if U[i-1, j] * U[i, j] <= 0
-                taus[j] = ts[i]
-                break
-            end
-        end
+function findTimeShift(U, ts, U_ref)
+    @show U_ref
+    n_i = size(U, 2)
+    shift_idx = zeros(Int, n_i)
+    for i in 1:n_i
+        min_i = argmin((U[:,i] .- U_ref[i]).^2)
+        shift_idx[i] = min_i
     end
+    taus = ts[shift_idx]
     return taus
 end
 
@@ -74,7 +72,7 @@ function adjustPhaseForAllInputs(A, phi, taus, T, M, n_i, ωs)
 end
 
 # Compute RPF for each input
-function calculateRPF(U, n_i, n_t)
+function calculateRPF(U, n_i)
     rpf = zeros(n_i)
     for j = 1:n_i
         peak_to_peak = maximum(U[:, j]) - minimum(U[:, j])
@@ -83,32 +81,23 @@ function calculateRPF(U, n_i, n_t)
     return rpf
 end
 
-function scale_column(column, new_min, new_max)
-    A, B = minimum(column), maximum(column)
-    ((column .- A) ./ (B - A)) .* (new_max - new_min) .+ new_min
-end
+function run_orthogonal_multisines(problem::InputOptimizationProblem)
+    # ts = problem.times
+    ts = problem.Δt .* collect(1:problem.t_horizon)
+    T = problem.t_horizon * problem.Δt
+    n_t = problem.n_t
+    n_i = problem.m
+    t_horizon = problem.t_horizon
+    U_desired = problem.Z[14:18, end] # last control input (current), where we want to start at 
+    delta_max = problem.delta_max
+    n = problem.n
+    m = problem.m
+    Z = problem.Z
+    A_hat = problem.A_hat
+    B_hat = problem.B_hat
 
-function shift(U, U_desired, n_i)    
-    shift_idx = zeros(Int, n_i)
-    U_shift = zeros(size(U))
-    for i in 1:n_i
-        shift_idx[i] = argmin((U[:,i] .- U_desired[i]).^2)
-        U_shift[:, i] = [U[shift_idx[i]:end, i]; U[1:shift_idx[i]-1, i]]
-    end
-
-    return U_shift
-end
-
-function run_orthogonal_multisines(ts, T, n_t, U_desired::Vector{Float64}, t_horizon::Int64, n_i::Int64 = 4, max_A::Float64=0.1, M::Int64 = 14)
-    # Constants and initial conditions as in your Julia code
-    # T = 27.0
-    # n_t = 1000
-    # M = 14
-    # n_i = 3
-    # T = t_horizon
-    # n_t = t_horizon#25
-
-    # ts = range(0, stop=T, length=n_t)
+    M = 14 # Number of sinusoidal components
+    max_A = delta_max * T / 2
 
     A0 = max_A .* rand(n_i, 1)
     phi0 = rand(n_i, M)* π #* 2 * π
@@ -116,7 +105,7 @@ function run_orthogonal_multisines(ts, T, n_t, U_desired::Vector{Float64}, t_hor
     lb = [zeros(length(A0[:])); zeros(length(phi0[:]))]
     ub = [max_A .* ones(length(A0[:])); 2*π*ones(length(phi0[:]))]
 
-    # Define the angular frequencies
+    # Define the angular frequencies from Morelli 2021
     f_min, f_max = 0.1, 1.7
     fs = LinRange(0.1, 1.7, n_i*M)
     fs = reshape(fs, n_i, M)
@@ -127,7 +116,7 @@ function run_orthogonal_multisines(ts, T, n_t, U_desired::Vector{Float64}, t_hor
     # Initialize power fraction matrix P with zeros for 3 controls and M frequencies
     P = zeros(4, M)
 
-    # Assign power fractions based on the bar chart for each control
+    # Assign power fractions based on the bar chart for each control from Morelli 2021
     P[1, :] = [0.06, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.07, 0.06, 0.05, 0.04] 
     P[2, :] = [0.06, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.07, 0.06, 0.05, 0.04] 
     P[3, :] = [0.07, 0.07, 0.07, 0.07, 0.07, 0.07, 0.07, 0.07, 0.07, 0.07, 0.07, 0.07, 0.07, 0.07]
@@ -136,35 +125,48 @@ function run_orthogonal_multisines(ts, T, n_t, U_desired::Vector{Float64}, t_hor
 
     # Perform optimization
     data = (n_i, M, n_t, ts, T, ωs, P)
-    x_opt, minf, ret = optimizeWithSQP(x0, lb, ub, data)
+    x_opt, minf, ret = optimize_signal(x0, lb, ub, data)
 
     # Post-optimization: Retrieve optimized variables and reconstruct U
     A_opt = x_opt[1:n_i] #reshape(x_opt[1:n_i], n_i, 1) #.* sqrt(1/M)
     phi_opt = reshape(x_opt[n_i+1:end], n_i, M)
-    U_opt = generateSignal(ts, n_i, M, T, A_opt, phi_opt, ωs, P)
+    U_opt = generateSignal(ts, n_i, t_horizon, M, A_opt, phi_opt, ωs, P)
 
-    taus = findTimeShift(U_opt, ts)
+    taus = findTimeShift(U_opt, ts, zeros(n_i))
 
     # Adjust the phase angles based on the calculated tau
     phi_opt_adjusted = adjustPhaseForAllInputs(A_opt, phi_opt, taus, T, M, n_i, ωs)
 
     # Generate the adjusted signal
-    U_adjusted = generateSignal(ts, n_i, M, T, A_opt, phi_opt_adjusted, ωs, P)
+    U_adjusted = generateSignal(ts, n_i, t_horizon, M, A_opt, phi_opt_adjusted, ωs, P)
 
+    @show U_adjusted[end,:]
 
-    rpf = calculateRPF(U_adjusted, n_i, n_t)
+    rpf = calculateRPF(U_adjusted, n_i)
 
-    # U_scaled = zeros(size(U_opt))
-    # U_scaled[:, 1] = scale_column(U_opt[:, 1], U_desired[1] - 0.1, U_desired[1] + 0.1) # Elevator
-    # U_scaled[:, 2] = scale_column(U_opt[:, 2], U_desired[2] - 0.1, U_desired[2] + 0.1) # Aileron
-    # U_scaled[:, 3] = scale_column(U_opt[:, 3], U_desired[3] - 0.1, U_desired[3] + 0.1) # Rudder
-    # U_scaled[:, 4] = scale_column(U_opt[:, 4], U_desired[4] - 0.1, U_desired[4] + 0.1) # Throttle
-
-    # U_shift = shift(U_scaled, U_desired, n_i)
     U_adjusted .+= U_desired'
 
     println(ret)
 
-    return U_adjusted, A_opt, phi_opt_adjusted, ts, T, M, n_i, ωs, P
-    # return U_shift, A_opt, phi_opt, ts, T, M, n_i, ωs, P
+    @show max_A
+
+    control_traj = U_adjusted
+    Z_planned = zeros(n+m, t_horizon+n_t)
+    Z_planned[:, 1:n_t] = Z
+    @show size(Z_planned[n+1:end, n_t+1:end])
+    @show size(control_traj')
+    @show size(U_adjusted)
+    @show size(A_hat)
+    @show size(B_hat)
+    @show size(Z_planned)
+    Z_planned[n+1:end, n_t+1:end] = control_traj'
+
+    for i in n_t:(n_t+t_horizon-1)
+        Z_planned[1:n, i+1] .= A_hat * Z_planned[1:n, i] + B_hat*Z_planned[n+1:end, i]
+        # Z_planned[1:n, n_t + i] = Z_planned[1:n, n_t + i - 1] + A_hat * Z_planned[1:n, n_t + i - 1] + B_hat * control_traj[i, :]
+    end
+
+    @show StatsBase.reconstruct(problem.scaler, Z_planned)[14:18, end-1:end]
+    return Z_planned
+    # return U_adjusted, A_opt, phi_opt_adjusted, ts, T, M, n_i, ωs, P
 end
