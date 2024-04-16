@@ -5,7 +5,7 @@ using Gurobi
 using Interpolations
 using Distributions
 
-function build_model(safe_bounds::Matrix{Float64}, Z_t::Matrix{Float64}, A_hat::Matrix{Float64}, B_hat::Matrix{Float64}, n::Int64, m::Int64, n_t::Int64, t_horizon::Int64, Z_cur::Matrix{Float64}, Sigma_0_inv::Matrix{Float64}, scaler::UnitRangeTransform{Float64,Vector{Float64}}, delta_max::Float64, method::String)
+function build_model(safe_bounds::Matrix{Float64}, Z_t::Matrix{Float64}, A_hat::Matrix{Float64}, B_hat::Matrix{Float64}, n::Int64, m::Int64, n_t::Int64, t_horizon::Int64, Z_cur::Matrix{Float64}, Sigma_0_inv::Matrix{Float64}, scaler::UnitRangeTransform{Float64,Vector{Float64}}, delta_maxs::Vector{Float64}, method::String)
     if method == "exact"
         model = Model(Mosek.Optimizer)
         @variable(model, Y[1:n+m, 1:n+m], PSD)
@@ -34,8 +34,9 @@ function build_model(safe_bounds::Matrix{Float64}, Z_t::Matrix{Float64}, A_hat::
     # Dynamics and control constraints
     for i in n_t:(n_t+t_horizon-1)
         @constraint(model, Z[1:n, i+1] .== A_hat * Z[1:n, i] + B_hat * Z[n+1:end, i]) # Dynamics
-        @constraint(model, Z[n+1:end, i] - Z[n+1:end, i+1] .<= delta_max) # Control variation
-        @constraint(model, Z[n+1:end, i+1] - Z[n+1:end, i] .<= delta_max)
+        @constraint(model, Z[n+1:end, i] - Z[n+1:end, i+1] .<= delta_maxs) # Control variation
+        @constraint(model, Z[n+1:end, i] - Z[n+1:end, i+1] .>= -delta_maxs)
+        # @constraint(model, Z[n+1:end, i+1] - Z[n+1:end, i] .<= delta_maxs)
     end
 
     upper_bounds = safe_bounds[:, 2]
@@ -50,7 +51,7 @@ function build_model(safe_bounds::Matrix{Float64}, Z_t::Matrix{Float64}, A_hat::
     desired_end_state = StatsBase.transform(scaler, desired_end_state)
     println("Desired end state: ", desired_end_state)
     # @constraint(model, Z[4:6, n_t+t_horizon] .== desired_end_state[4:6])
-    @constraint(model, Z[2:9, n_t+t_horizon] .== desired_end_state[2:9])
+    # @constraint(model, Z[2:9, n_t+t_horizon] .== desired_end_state[2:9])
 
     return model
 end
@@ -68,7 +69,7 @@ function plan_control_inputs(problem::InputOptimizationProblem, method::String="
     m = problem.m
     n_t = problem.n_t
     t_horizon = problem.t_horizon
-    delta_max = problem.delta_max
+    delta_maxs = problem.delta_maxs
     
     Sigma_0_inv = diagm(0 => ones(n + m)) # Assuming Sigma_0_inv is defined elsewhere
     # Z_cur = [Z_t Z_t[:, end] .+ zeros(n+m, t_horizon)]
@@ -82,7 +83,7 @@ function plan_control_inputs(problem::InputOptimizationProblem, method::String="
     Z_ctrl_val = Nothing
 
     build_time = time()
-    model = build_model(safe_bounds, Z_t, A_hat, B_hat, n, m, n_t, t_horizon, Z_cur, Sigma_0_inv, scaler, delta_max, method)
+    model = build_model(safe_bounds, Z_t, A_hat, B_hat, n, m, n_t, t_horizon, Z_cur, Sigma_0_inv, scaler, delta_maxs, method)
     build_end_time = time()
     println("Time spent in build_model: ", build_end_time - build_time)
 

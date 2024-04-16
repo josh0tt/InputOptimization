@@ -88,26 +88,28 @@ function run_orthogonal_multisines(problem::InputOptimizationProblem)
     n_t = problem.n_t
     n_i = problem.m
     t_horizon = problem.t_horizon
-    U_desired = problem.Z[14:18, end] # last control input (current), where we want to start at 
-    delta_max = problem.delta_max
+
     n = problem.n
     m = problem.m
     Z = problem.Z
     A_hat = problem.A_hat
     B_hat = problem.B_hat
+    max_As = problem.max_As
+    Z_unscaled = StatsBase.reconstruct(problem.scaler, Z)
+    U_desired = Z_unscaled[n+1:end, end] # last control input (current), where we want to start at 
 
     M = 14 # Number of sinusoidal components
-    max_A = delta_max * T / 2
 
-    A0 = max_A .* rand(n_i, 1)
+    A0 = max_As .* rand(n_i, 1)
     phi0 = rand(n_i, M)* π #* 2 * π
     x0 = vcat(A0[:], phi0[:])
     lb = [zeros(length(A0[:])); zeros(length(phi0[:]))]
-    ub = [max_A .* ones(length(A0[:])); 2*π*ones(length(phi0[:]))]
+    # ub = [max_A .* ones(length(A0[:])); 2*π*ones(length(phi0[:]))]
+    ub = [max_As; 2*π*ones(length(phi0[:]))]
 
     # Define the angular frequencies from Morelli 2021
-    f_min, f_max = 0.1, 1.7
-    fs = LinRange(0.1, 1.7, n_i*M)
+    f_min, f_max = problem.f_min, problem.f_max
+    fs = LinRange(f_min, f_max, n_i*M)
     fs = reshape(fs, n_i, M)
     # convert to integers required for the same base period for ω = 2πk/T
     ks = round.(Int, fs * T)
@@ -148,25 +150,26 @@ function run_orthogonal_multisines(problem::InputOptimizationProblem)
 
     println(ret)
 
-    @show max_A
-
-    control_traj = U_adjusted
+    control_traj = U_adjusted'
+    control_traj = StatsBase.transform(problem.scaler, vcat(zeros(n, t_horizon), control_traj))
+    control_traj = control_traj[n+1:end, :]
     Z_planned = zeros(n+m, t_horizon+n_t)
     Z_planned[:, 1:n_t] = Z
+    Z_planned[n+1:end, n_t+1:end] = control_traj
+
     @show size(Z_planned[n+1:end, n_t+1:end])
-    @show size(control_traj')
+    @show size(control_traj)
     @show size(U_adjusted)
     @show size(A_hat)
     @show size(B_hat)
     @show size(Z_planned)
-    Z_planned[n+1:end, n_t+1:end] = control_traj'
 
     for i in n_t:(n_t+t_horizon-1)
         Z_planned[1:n, i+1] .= A_hat * Z_planned[1:n, i] + B_hat*Z_planned[n+1:end, i]
         # Z_planned[1:n, n_t + i] = Z_planned[1:n, n_t + i - 1] + A_hat * Z_planned[1:n, n_t + i - 1] + B_hat * control_traj[i, :]
     end
 
-    @show StatsBase.reconstruct(problem.scaler, Z_planned)[14:18, end-1:end]
+    @show StatsBase.reconstruct(problem.scaler, Z_planned)[n+1:end, end-1:end]
     return Z_planned
     # return U_adjusted, A_opt, phi_opt_adjusted, ts, T, M, n_i, ωs, P
 end

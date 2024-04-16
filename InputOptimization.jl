@@ -21,7 +21,10 @@ struct OrthogonalMultisine <: SolutionMethod end
     Δt::Float64                                         # time step for planning
     safe_bounds::Matrix{Float64}                        # (n+m) x 2 safety bounds scaled
     safe_bounds_unscaled::Matrix{Float64}               # (n+m) x 2 safety bounds unscaled
-    delta_max::Float64                                  # maximum change in control inputs between time steps
+    delta_maxs::Vector{Float64}                         # maximum change in control inputs between time steps
+    max_As::Vector{Float64}                             # maximum amplitude of control inputs
+    f_min::Float64                                      # minimum frequency for multisines
+    f_max::Float64                                      # maximum frequency for multisines
     row_names::Vector{String}                           # Z row names
 end
 

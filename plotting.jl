@@ -53,10 +53,12 @@ function Plots.plot(problem::InputOptimizationProblem, Z_planned::Matrix{Float64
 
     execution_times = times[end] .+ problem.Δt .* collect(1:problem.t_horizon)
 
+    println("Max control diff: ", maximum(abs.(Z_actual_unscaled[n+1:end, 2:end] .- Z_actual_unscaled[n+1:end, 1:end-1]), dims=2))
+
     # create predicted Z. This is the output that would we would predict given the control inputs that were actually executed from the autopilot.
     Z_predicted = zeros(n+m, t_horizon)
     Z_predicted[:, 1] = Z_actual[:, 1]
-    Z_predicted[n+1:end, :] = Z_actual[n+1:end, :]
+    Z_predicted[n+1:end, :] = Z_actual[n+1:end, 1:size(Z_predicted, 2)]
 
     for i in 1:(t_horizon-1)
         Z_predicted[1:n, i+1] = A_hat * Z_predicted[1:n, i] + B_hat * Z_predicted[n+1:end, i]
