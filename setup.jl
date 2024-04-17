@@ -39,6 +39,8 @@ The function returns the `InputOptimizationProblem` object.
 
 """
 function problem_setup()
+    rng = MersenneTwister(1234)
+
     # 1. run F16 waypoint simulation to collect data set 
     # we don't need it this smooth, we should just limit how far from the starting init we can go
     times, states, controls = run_f16_waypoint_sim()
@@ -94,7 +96,7 @@ function problem_setup()
     A_hat, B_hat = estimate_linear_system(Z, n)
 
     # 4. create the InputOptimizationProblem
-    problem = InputOptimizationProblem(Z, scaler, times, A_hat, B_hat, n, m, n_t, t_horizon, Δt, safe_bounds, safe_bounds_unscaled, delta_maxs, max_As, f_min, f_max, ["vt", "alpha", "beta", "phi", "theta", "psi", "P", "Q", "R", "pn", "pe", "h", "pow", "throt", "ele", "ail", "rud"])
+    problem = InputOptimizationProblem(rng, Z, scaler, times, A_hat, B_hat, n, m, n_t, t_horizon, Δt, safe_bounds, safe_bounds_unscaled, delta_maxs, max_As, f_min, f_max, ["vt", "alpha", "beta", "phi", "theta", "psi", "P", "Q", "R", "pn", "pe", "h", "pow", "throt", "ele", "ail", "rud"])
 
     return problem
 end

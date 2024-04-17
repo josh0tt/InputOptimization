@@ -73,7 +73,7 @@ function plan_control_inputs(problem::InputOptimizationProblem, method::String="
     
     Sigma_0_inv = diagm(0 => ones(n + m)) # Assuming Sigma_0_inv is defined elsewhere
     # Z_cur = [Z_t Z_t[:, end] .+ zeros(n+m, t_horizon)]
-    Z_cur = [Z_t Z_t[:, end] .+ rand(Normal(0, 1.0), n + m, t_horizon)]
+    Z_cur = [Z_t Z_t[:, end] .+ rand(problem.rng, Normal(0, 1.0), n + m, t_horizon)]
     max_iter = 10
     tol = 1e-3
     obj = Inf

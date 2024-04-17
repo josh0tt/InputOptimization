@@ -1,4 +1,4 @@
-function run_f16_waypoint_sim()
+function run_f16_waypoint_sim(gif=false)
     pushfirst!(PyVector(pyimport("sys")."path"), "")
 
     py"""
@@ -10,7 +10,7 @@ function run_f16_waypoint_sim()
     from aerobench.visualize import anim3d, plot
     from aerobench.examples.waypoint.waypoint_autopilot import WaypointAutopilot
 
-    def simulate():
+    def simulate(gif):
         'simulate the system, returning waypoints, res'
 
         ### Initial Conditions ###
@@ -112,10 +112,10 @@ function run_f16_waypoint_sim()
             anim_lines[1].set_data(done_xs, done_ys)
             anim_lines[1].set_3d_properties(done_zs)
 
-
-        # anim3d.make_anim(res, filename, f16_scale=70, viewsize=5000, viewsize_z=4000, trail_pts=np.inf,
-        #                  elev=27, azim=-107, skip_frames=skip_override,
-        #                  chase=True, fixed_floor=True, init_extra=init_extra, update_extra=update_extra)
+        if gif:
+            anim3d.make_anim(res, filename, f16_scale=70, viewsize=5000, viewsize_z=4000, trail_pts=np.inf,
+                            elev=27, azim=-107, skip_frames=skip_override,
+                            chase=True, fixed_floor=True, init_extra=init_extra, update_extra=update_extra)
 
         return res["times"], res["states"], np.array(res['u_list'])
 
@@ -123,7 +123,7 @@ function run_f16_waypoint_sim()
 
     # state is [vt, alpha, beta, phi, theta, psi, P, Q, R, pn, pe, h, pow]
     # u is: throt, ele, ail, rud, Nz_ref, ps_ref, Ny_r_ref
-    times, states, controls = py"simulate"()
+    times, states, controls = py"simulate"(gif)
     
     # only keep the first 13 columns of states (the others are integration variables)
     states = states[:, 1:13]
@@ -140,7 +140,7 @@ function run_f16_waypoint_sim()
     return times, states, controls
 end
 
-function run_f16_sim(problem::InputOptimizationProblem, Z_planned::Matrix{Float64})
+function run_f16_sim(problem::InputOptimizationProblem, Z_planned::Matrix{Float64}, gif=false)
     n_t = problem.n_t
     Z_planned_unscaled = StatsBase.reconstruct(problem.scaler, Z_planned)
     # we go from n_t to end because the first value was the last control input from the collected data
@@ -167,17 +167,18 @@ function run_f16_sim(problem::InputOptimizationProblem, Z_planned::Matrix{Float6
     from aerobench.visualize import anim3d, plot
     from aerobench.examples.straight_and_level.run import StraightAndLevelAutopilot
 
-    def simulate(init, alt, u_seq, tmax, step = 1/30):
+    def simulate(init, alt, u_seq, tmax, gif, step = 1/30):
         ap = StraightAndLevelAutopilot(alt)
         extended_states = True
         res = run_f16_sim(init, tmax, ap, u_seq, step=step, extended_states=extended_states, integrator_str='rk45')
 
-        filename = 'straight_and_level.gif'
-        anim3d.make_anim(res, filename, elev=15, azim=-150, skip_frames=15)    
+        if gif:
+            filename = 'straight_and_level.gif'
+            anim3d.make_anim(res, filename, elev=15, azim=-150, skip_frames=15)    
         return res["times"], res["states"], np.array(res['u_list'])
     """
 
-    times, states, controls = py"simulate"(init, alt, u_seq, round(Int64, problem.t_horizon * problem.Δt))
+    times, states, controls = py"simulate"(init, alt, u_seq, round(Int64, problem.t_horizon * problem.Δt), gif)
 
     # only keep the first 13 columns of states (the others are integration variables)
     states = states[:, 1:13]

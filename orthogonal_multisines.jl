@@ -100,8 +100,8 @@ function run_orthogonal_multisines(problem::InputOptimizationProblem)
 
     M = 14 # Number of sinusoidal components
 
-    A0 = max_As .* rand(n_i, 1)
-    phi0 = rand(n_i, M)* π #* 2 * π
+    A0 = max_As .* rand(problem.rng, n_i, 1)
+    phi0 = rand(problem.rng, n_i, M)* π #* 2 * π
     x0 = vcat(A0[:], phi0[:])
     lb = [zeros(length(A0[:])); zeros(length(phi0[:]))]
     # ub = [max_A .* ones(length(A0[:])); 2*π*ones(length(phi0[:]))]

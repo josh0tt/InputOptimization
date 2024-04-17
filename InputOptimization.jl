@@ -3,12 +3,15 @@ using PyCall
 using StatsBase
 using Plots
 using Measures
+using Random
 
 abstract type SolutionMethod end
 struct ConvexConcave <: SolutionMethod end
 struct OrthogonalMultisine <: SolutionMethod end
+struct PRBS <: SolutionMethod end
 
 @with_kw struct InputOptimizationProblem
+    rng::MersenneTwister                                # random number generator
     Z::Matrix{Float64}                                  # (n+m) x t observed data
     scaler::UnitRangeTransform{Float64,Vector{Float64}} # scaler used to scale the data
     times::Vector{Float64}                              # t x 1 times at which data is observed
@@ -33,6 +36,7 @@ include("helpers.jl")
 include("setup.jl")
 include("convex_concave.jl")
 include("orthogonal_multisines.jl")
+include("prbs.jl")
 include("plotting.jl")
 
 function solve(problem::InputOptimizationProblem, method::ConvexConcave)
@@ -52,12 +56,18 @@ function solve(problem::InputOptimizationProblem, method::OrthogonalMultisine)
     return Z_planned
 end
 
-problem = problem_setup()
-Z_planned = solve(problem, ConvexConcave())
-# Z_planned = solve(problem, OrthogonalMultisine())
+function solve(problem::InputOptimizationProblem, method::PRBS)
+    println("Solving with PRBS")
 
-times_actual, Z_actual = run_f16_sim(problem, Z_planned)
-plot(problem, Z_planned, Z_actual, times_actual .+ problem.times[end])
+    Z_planned = run_prbs(problem)
 
-# TODO: we are currently using delta_max to limit how much controls can change between time steps. 
-# Need a way to equalize this with orthogonal multisines amplitude constraints. 
+    return Z_planned
+end
+
+# problem = problem_setup()
+# Z_planned = solve(problem, PRBS())
+# # Z_planned = solve(problem, ConvexConcave())
+# # # Z_planned = solve(problem, OrthogonalMultisine())
+
+# times_actual, Z_actual = run_f16_sim(problem, Z_planned)
+# plot(problem, Z_planned, Z_actual, times_actual .+ problem.times[end])
