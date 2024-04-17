@@ -34,7 +34,6 @@ function compute_sigma(Z::Matrix{Float64}, n::Int64)
     A = Theta[:, 1:n]
     B = Theta[:, n+1:end]
 
-
     residual = X_prime - (A * X + B * U)
     residual_norm = norm(residual, 2)
     sigma = std(residual)
@@ -58,43 +57,33 @@ function run_experiments()
 
     # run each method once first to compile
     solve(problem, ConvexConcave());
-    # solve(problem, OrthogonalMultisine());
-    # solve(problem, PRBS());
+    solve(problem, OrthogonalMultisine());
+    solve(problem, PRBS());
 
     num_sims = 100
 
     @showprogress dt=0.5 desc="Running sims..." for i in 1:num_sims
+        # for method in [ConvexConcave(), OrthogonalMultisine(), PRBS()]
+        for method in [ConvexConcave()]
+            Z_planned, runtime = @timed solve(problem, method);
+            times_actual, Z_actual = run_f16_sim(problem, Z_planned);
+            Z_final = hcat(problem.Z, Z_actual[:, 2:end]);
+            Z_final_unscaled = StatsBase.reconstruct(problem.scaler, Z_final)
+            Z_actual_unscaled = StatsBase.reconstruct(problem.scaler, Z_actual)
 
-        # Run CCP
-        Z_planned, runtime = @timed solve(problem, ConvexConcave());
-        times_actual, Z_actual = run_f16_sim(problem, Z_planned);
-        Z_final = hcat(problem.Z, Z_actual[:, 2:end]);
+            if method == ConvexConcave()
+                data = ccp_data
+            elseif method == OrthogonalMultisine()
+                data = orthog_data
+            else
+                data = random_data
+            end
 
-        # Store ccp data
-        ccp_data.objectives = push!(ccp_data.objectives, compute_objective(Z_final, problem.n))
-        ccp_data.runtimes = push!(ccp_data.runtimes, runtime)
-        ccp_data.Zs = push!(ccp_data.Zs, Z_actual)
+            data.objectives = push!(data.objectives, compute_objective(Z_final, problem.n))
+            data.runtimes = push!(data.runtimes, runtime)
+            data.Zs = push!(data.Zs, Z_actual_unscaled)
+        end
 
-        # # Run Orthogonal Multisine
-        # Z_planned, runtime = @timed solve(problem, OrthogonalMultisine());
-        # times_actual, Z_actual = run_f16_sim(problem, Z_planned);
-        # Z_final = hcat(problem.Z, Z_actual[:, 2:end]);
-
-        # # Store orthogonal multisine data
-        # orthog_data.objectives = push!(orthog_data.objectives, compute_objective(Z_final, problem.n))
-        # orthog_data.runtimes = push!(orthog_data.runtimes, runtime)
-        # orthog_data.Zs = push!(orthog_data.Zs, Z_actual)
-
-        # # Run PRBS
-        # Z_planned, runtime = @timed solve(problem, PRBS());
-        # times_actual, Z_actual = run_f16_sim(problem, Z_planned);
-        # Z_final = hcat(problem.Z, Z_actual[:, 2:end]);
-
-        # # Store random data
-        # random_data.objectives = push!(random_data.objectives, compute_objective(Z_final, problem.n))
-        # random_data.runtimes = push!(random_data.runtimes, runtime)
-        # random_data.Zs = push!(random_data.Zs, Z_actual)
-        
         sleep(0.1)
     end
 

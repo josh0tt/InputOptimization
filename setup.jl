@@ -76,6 +76,11 @@ function problem_setup()
     
     # equating constraints between ccp and orthogonal multisines
     max_As = find_max_As(n, m, Z_unscaled, safe_bounds_unscaled)
+    # Update the safe bounds to account for the maximum allowable deviation in control inputs
+    for i in 1:m
+        safe_bounds_unscaled[n+i, 1] = Z_unscaled[n+i, end] - max_As[i]
+        safe_bounds_unscaled[n+i, 2] = Z_unscaled[n+i, end] + max_As[i]
+    end
     f_min, f_max = 0.1, 1.7 # Hz
     # create m sinuoids using max_As and ω=2*π*f_max
     sines = max_As .* sin.(2*π*f_max .* times)' # should be m x n_t
