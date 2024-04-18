@@ -58,13 +58,13 @@ function run_experiments()
     # run each method once first to compile
     solve(problem, ConvexConcave());
     solve(problem, OrthogonalMultisine());
-    solve(problem, PRBS());
+    solve(problem, Random());
 
     num_sims = 100
 
     @showprogress dt=0.5 desc="Running sims..." for i in 1:num_sims
-        # for method in [ConvexConcave(), OrthogonalMultisine(), PRBS()]
-        for method in [ConvexConcave()]
+        # for method in [ConvexConcave(), OrthogonalMultisine(), Random()]
+        for method in [Random()]
             Z_planned, runtime = @timed solve(problem, method);
             times_actual, Z_actual = run_f16_sim(problem, Z_planned);
             Z_final = hcat(problem.Z, Z_actual[:, 2:end]);
@@ -87,9 +87,9 @@ function run_experiments()
         sleep(0.1)
     end
 
-    JLD2.save("ccp_data.jld2", "ccp_data", ccp_data)
+    # JLD2.save("ccp_data.jld2", "ccp_data", ccp_data)
     # JLD2.save("orthog_data.jld2", "orthog_data", orthog_data)
-    # JLD2.save("random_data.jld2", "random_data", random_data)
+    JLD2.save("random_data.jld2", "random_data", random_data)
 end
 
 run_experiments()

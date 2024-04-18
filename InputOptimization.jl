@@ -8,7 +8,7 @@ using Random
 abstract type SolutionMethod end
 struct ConvexConcave <: SolutionMethod end
 struct OrthogonalMultisine <: SolutionMethod end
-struct PRBS <: SolutionMethod end
+struct Random <: SolutionMethod end
 
 @with_kw struct InputOptimizationProblem
     rng::MersenneTwister                                # random number generator
@@ -36,7 +36,7 @@ include("helpers.jl")
 include("setup.jl")
 include("convex_concave.jl")
 include("orthogonal_multisines.jl")
-include("prbs.jl")
+include("random.jl")
 include("plotting.jl")
 
 function solve(problem::InputOptimizationProblem, method::ConvexConcave)
@@ -56,16 +56,16 @@ function solve(problem::InputOptimizationProblem, method::OrthogonalMultisine)
     return Z_planned
 end
 
-function solve(problem::InputOptimizationProblem, method::PRBS)
-    println("Solving with PRBS")
+function solve(problem::InputOptimizationProblem, method::Random)
+    println("Solving with Random")
 
-    Z_planned = run_prbs(problem)
+    Z_planned = run_random(problem)
 
     return Z_planned
 end
 
 # problem = problem_setup()
-# Z_planned = solve(problem, PRBS())
+# Z_planned = solve(problem, Random())
 # # Z_planned = solve(problem, ConvexConcave())
 # # # Z_planned = solve(problem, OrthogonalMultisine())
 

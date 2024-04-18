@@ -204,7 +204,23 @@ function sequence_detecterrors(t::MaxLFSR{LEN}, v::Vector{T}) where {LEN, T<:Num
     return _errors
 end
 
-function run_prbs(problem::InputOptimizationProblem)
+function markov_sequence(rng::MersenneTwister, len::Int64, m::Int64, p::Float64=0.75)
+    # for each of the m control inputs generate a sequence that alternates between 0 and 1. With probability p=0.75 that we remain at the previous value
+    sequence = zeros(m, len)
+    sequence[:, 1] = rand(rng, [0,1], m)
+    for i in 1:m
+        for j in 2:len
+            if rand(rng) < p
+                sequence[i, j] = sequence[i, j-1]
+            else
+                sequence[i, j] = sequence[i, j-1] == 0 ? 1 : 0
+            end
+        end
+    end
+    return sequence        
+end
+
+function run_random(problem::InputOptimizationProblem)
     # Create an instance of MaxLFSR for a register length of 31
     lfsr_instance = MaxLFSR(31)
 
@@ -220,10 +236,12 @@ function run_prbs(problem::InputOptimizationProblem)
     Z_unscaled = StatsBase.reconstruct(problem.scaler, Z)
     U_desired = Z_unscaled[n+1:end, end]
 
-    # Generate the sequence using the specified seed and length
-    # Setting the output data type as Bool (true/false for 1/0)
-    U = Matrix(hcat([collect(sequence(lfsr_instance, seed=rand(problem.rng, 1:100)+i, len=problem.t_horizon, output=Bool)) for i in 1:problem.m]...)')
-
+    # PRBS using specified seed and length
+    # U = Matrix(hcat([collect(sequence(lfsr_instance, seed=rand(problem.rng, 1:100)+i, len=problem.t_horizon, output=Bool)) for i in 1:problem.m]...)')
+    
+    # Markov Sequence
+    U = markov_sequence(problem.rng, problem.t_horizon, problem.m)
+    
     # U is size (m, t_horizon)
     # we need to scale each column of U so that the 1s correspond to max_As + U_desired and 0s correspond to U_desired - max_As
     @show size(U)
