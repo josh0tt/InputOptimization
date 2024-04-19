@@ -7,8 +7,9 @@ using Random
 
 abstract type SolutionMethod end
 struct ConvexConcave <: SolutionMethod end
+struct ConvexConcaveSDP <: SolutionMethod end
 struct OrthogonalMultisine <: SolutionMethod end
-struct Random <: SolutionMethod end
+struct RandomSequence <: SolutionMethod end
 
 @with_kw struct InputOptimizationProblem
     rng::MersenneTwister                                # random number generator
@@ -41,31 +42,30 @@ include("plotting.jl")
 
 function solve(problem::InputOptimizationProblem, method::ConvexConcave)
     println("Solving with Convex Concave")
-
-    # control_traj, Z_planned, infeasible_flag = plan_control_inputs(problem)
     Z_planned = plan_control_inputs(problem)
+    return Z_planned
+end
 
+function solve(problem::InputOptimizationProblem, method::ConvexConcaveSDP)
+    println("Solving with Convex Concave SDP")
+    Z_planned = plan_control_inputs(problem, "SDP")
     return Z_planned
 end
 
 function solve(problem::InputOptimizationProblem, method::OrthogonalMultisine)
     println("Solving with Orthogonal Multisine")
-
     Z_planned = run_orthogonal_multisines(problem)
-
     return Z_planned
 end
 
-function solve(problem::InputOptimizationProblem, method::Random)
-    println("Solving with Random")
-
+function solve(problem::InputOptimizationProblem, method::RandomSequence)
+    println("Solving with Random Sequence")
     Z_planned = run_random(problem)
-
     return Z_planned
 end
 
 # problem = problem_setup()
-# Z_planned = solve(problem, Random())
+# Z_planned = solve(problem, RandomSequence())
 # # Z_planned = solve(problem, ConvexConcave())
 # # # Z_planned = solve(problem, OrthogonalMultisine())
 

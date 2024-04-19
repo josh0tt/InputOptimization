@@ -6,7 +6,7 @@ using Interpolations
 using Distributions
 
 function build_model(safe_bounds::Matrix{Float64}, Z_t::Matrix{Float64}, A_hat::Matrix{Float64}, B_hat::Matrix{Float64}, n::Int64, m::Int64, n_t::Int64, t_horizon::Int64, Z_cur::Matrix{Float64}, Sigma_0_inv::Matrix{Float64}, scaler::UnitRangeTransform{Float64,Vector{Float64}}, delta_maxs::Vector{Float64}, method::String)
-    if method == "exact"
+    if method == "SDP"
         model = Model(Mosek.Optimizer)
         @variable(model, Y[1:n+m, 1:n+m], PSD)
     else
@@ -18,11 +18,15 @@ function build_model(safe_bounds::Matrix{Float64}, Z_t::Matrix{Float64}, A_hat::
     Z = [Z_t Z_ctrl]
     Z_diff = Z - Z_cur
     Z_diff_transpose = Z_diff'
-    W_hat = Z_cur * Z_cur' + Z_cur * Z_diff_transpose + Z_diff * Z_cur' + Sigma_0_inv
+    W_hat = Z_cur * Z_cur' + Z_cur * Z_diff_transpose + Z_diff * Z_cur' #+ Sigma_0_inv
 
-    if method == "exact"
+    if method == "SDP"
         @objective(model, Min, tr(Y))
         @constraint(model, [Y Diagonal(ones(n + m)); Diagonal(ones(n + m)) W_hat] >= 0, PSDCone())
+        # Set MOSEK tolerances
+        set_attribute(model, "INTPNT_CO_TOL_PFEAS", 1e-4)
+        set_attribute(model, "INTPNT_CO_TOL_DFEAS", 1e-4)   
+        set_attribute(model, "INTPNT_CO_TOL_MU_RED", 1e-4)
     else
         @objective(model, Min, -tr(W_hat))
     end
@@ -71,9 +75,14 @@ function plan_control_inputs(problem::InputOptimizationProblem, method::String="
     t_horizon = problem.t_horizon
     delta_maxs = problem.delta_maxs
     
-    Sigma_0_inv = diagm(0 => ones(n + m)) # Assuming Sigma_0_inv is defined elsewhere
-    # Z_cur = [Z_t Z_t[:, end] .+ zeros(n+m, t_horizon)]
-    Z_cur = [Z_t Z_t[:, end] .+ rand(problem.rng, Normal(0, 1.0), n + m, t_horizon)]
+    Sigma_0_inv = diagm(0 => ones(n + m))
+    if method == "SDP"
+        # using random initial Z_cur leads to infeasible Mosek
+        # Z_cur = [Z_t Z_t[:, end] .+ zeros(n+m, t_horizon)]
+        Z_cur = [Z_t Z_t[:, end] .+ rand(problem.rng, Normal(0, 0.05), n + m, t_horizon)]
+    else
+        Z_cur = [Z_t Z_t[:, end] .+ rand(problem.rng, Normal(0, 1.0), n + m, t_horizon)]
+    end    
     max_iter = 10
     tol = 1e-3
     obj = Inf
