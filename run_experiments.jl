@@ -5,7 +5,8 @@ include("InputOptimization.jl")
 
 mutable struct SimData
     problem::InputOptimizationProblem
-    objectives::Vector{Float64}
+    scaled_objectives::Vector{Float64}
+    unscaled_objectives::Vector{Float64}
     runtimes::Vector{Float64}
     Zs::Vector{Matrix{Float64}}
 end
@@ -51,10 +52,10 @@ end
 function run_experiments()
     problem = problem_setup()
 
-    ccp_data = SimData(problem, Vector{Float64}(), Vector{Float64}(), Vector{Matrix{Float64}}())
-    ccp_sdp_data = SimData(problem, Vector{Float64}(), Vector{Float64}(), Vector{Matrix{Float64}}())
-    orthog_data = SimData(problem, Vector{Float64}(), Vector{Float64}(), Vector{Matrix{Float64}}())
-    random_data = SimData(problem, Vector{Float64}(), Vector{Float64}(), Vector{Matrix{Float64}}())
+    ccp_data = SimData(problem, Vector{Float64}(), Vector{Float64}(), Vector{Float64}(), Vector{Matrix{Float64}}())
+    ccp_sdp_data = SimData(problem, Vector{Float64}(), Vector{Float64}(), Vector{Float64}(), Vector{Matrix{Float64}}())
+    orthog_data = SimData(problem, Vector{Float64}(), Vector{Float64}(), Vector{Float64}(), Vector{Matrix{Float64}}())
+    random_data = SimData(problem, Vector{Float64}(), Vector{Float64}(), Vector{Float64}(), Vector{Matrix{Float64}}())
 
     # run each method once first to compile
     solve(problem, ConvexConcave());
@@ -86,7 +87,7 @@ function run_experiments()
                     end
                 end
             end
-
+            
             Z_final = hcat(problem.Z, Z_actual[:, 2:end]);
             Z_final_unscaled = StatsBase.reconstruct(problem.scaler, Z_final)
             Z_actual_unscaled = StatsBase.reconstruct(problem.scaler, Z_actual)
@@ -101,8 +102,8 @@ function run_experiments()
                 data = random_data
             end
 
-            # data.objectives = push!(data.objectives, compute_objective(Z_final, problem.n))
-            data.objectives = push!(data.objectives, compute_objective(Z_final_unscaled, problem.n))
+            data.scaled_objectives = push!(data.scaled_objectives, compute_objective(Z_final, problem.n))
+            data.unscaled_objectives = push!(data.unscaled_objectives, compute_objective(Z_final_unscaled, problem.n))
             data.runtimes = push!(data.runtimes, runtime)
             data.Zs = push!(data.Zs, Z_actual_unscaled)
         end
@@ -110,8 +111,8 @@ function run_experiments()
         sleep(0.1)
     end
 
-    JLD2.save("ccp_data.jld2", "ccp_data", ccp_data)
     JLD2.save("ccp_sdp_data.jld2", "ccp_sdp_data", ccp_sdp_data)
+    JLD2.save("ccp_data.jld2", "ccp_data", ccp_data)
     JLD2.save("orthog_data.jld2", "orthog_data", orthog_data)
     JLD2.save("random_data.jld2", "random_data", random_data)
 end

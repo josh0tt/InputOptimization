@@ -80,8 +80,10 @@ function plan_control_inputs(problem::InputOptimizationProblem, method::String="
         # using random initial Z_cur leads to infeasible Mosek
         # Z_cur = [Z_t Z_t[:, end] .+ zeros(n+m, t_horizon)]
         Z_cur = [Z_t Z_t[:, end] .+ rand(problem.rng, Normal(0, 0.05), n + m, t_horizon)]
+        # Z_cur = [Z_t vcat(Z_t[1:n, end] .+ zeros(n, t_horizon), markov_sequence(problem))]
     else
         Z_cur = [Z_t Z_t[:, end] .+ rand(problem.rng, Normal(0, 1.0), n + m, t_horizon)]
+        # Z_cur = [Z_t vcat(Z_t[1:n, end] .+ zeros(n, t_horizon), markov_sequence(problem))]
     end    
     max_iter = 10
     tol = 1e-3

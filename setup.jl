@@ -39,7 +39,7 @@ The function returns the `InputOptimizationProblem` object.
 
 """
 function problem_setup()
-    rng = MersenneTwister(1234)
+    rng = MersenneTwister(12345)
 
     # 1. run F16 waypoint simulation to collect data set 
     # we don't need it this smooth, we should just limit how far from the starting init we can go
@@ -68,6 +68,7 @@ function problem_setup()
         -Inf Inf; # pe ft
         Z_unscaled[12, end]-400 Z_unscaled[12, end]+400; # h ft
         0 100; # pow
+        -0.5 3; # Nz
         Z_unscaled[14, end]-0.1 Z_unscaled[14, end]+0.4; # throt
         Z_unscaled[15, end]-1 Z_unscaled[15, end]+1; # ele
         Z_unscaled[16, end]-1 Z_unscaled[16, end]+1; # ail
@@ -81,7 +82,7 @@ function problem_setup()
         safe_bounds_unscaled[n+i, 1] = Z_unscaled[n+i, end] - max_As[i]
         safe_bounds_unscaled[n+i, 2] = Z_unscaled[n+i, end] + max_As[i]
     end
-    f_min, f_max = 0.1, 1.7 # Hz
+    f_min, f_max = 0.1, 1.7 # 0.2, 1.1 # Hz
     # create m sinuoids using max_As and ω=2*π*f_max
     sines = max_As .* sin.(2*π*f_max .* times)' # should be m x n_t
     sines_scaled = StatsBase.transform(scaler, vcat(zeros(n, n_t), sines))

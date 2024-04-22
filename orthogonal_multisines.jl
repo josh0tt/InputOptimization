@@ -36,7 +36,7 @@ function optimize_signal(x0::Vector{Float64}, lb::Vector{Float64}, ub::Vector{Fl
     opt.upper_bounds = ub
     opt.min_objective = (x, grad) -> objectiveFunction(x, grad, data)
     opt.xtol_rel = 1e-6
-    # opt.maxeval = 10000  # Increase if necessary
+    # opt.maxeval = 100000  # Increase if necessary
 
     (minf, x_opt, ret) = optimize(opt, x0)
     numevals = opt.numevals # the number of function evaluations
@@ -123,7 +123,10 @@ function run_orthogonal_multisines(problem::InputOptimizationProblem)
     P[2, :] = [0.06, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.07, 0.06, 0.05, 0.04] 
     P[3, :] = [0.07, 0.07, 0.07, 0.07, 0.07, 0.07, 0.07, 0.07, 0.07, 0.07, 0.07, 0.07, 0.07, 0.07]
     P[4, :] = [0.06, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.07, 0.06, 0.05, 0.04] 
-
+    # P[1, :] = [0.1, 0.3, 0.3, 0.2, 0.1] 
+    # P[2, :] = [0.1, 0.3, 0.3, 0.2, 0.1]
+    # P[3, :] = [0.1, 0.3, 0.3, 0.2, 0.1]
+    # P[4, :] = [0.1, 0.3, 0.3, 0.2, 0.1]  
 
     # Perform optimization
     data = (n_i, M, n_t, ts, T, ωs, P)

@@ -65,7 +65,7 @@ function solve(problem::InputOptimizationProblem, method::RandomSequence)
 end
 
 # problem = problem_setup()
-# Z_planned = solve(problem, RandomSequence())
+# Z_planned = solve(problem, ConvexConcave())
 # # Z_planned = solve(problem, ConvexConcave())
 # # # Z_planned = solve(problem, OrthogonalMultisine())
 

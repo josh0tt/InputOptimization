@@ -204,7 +204,16 @@ function sequence_detecterrors(t::MaxLFSR{LEN}, v::Vector{T}) where {LEN, T<:Num
     return _errors
 end
 
-function markov_sequence(rng::MersenneTwister, len::Int64, m::Int64, p::Float64=0.75)
+function markov_sequence(problem::InputOptimizationProblem, p::Float64=0.75)
+    rng = problem.rng
+    m = problem.m
+    n = problem.n
+    t_horizon = problem.t_horizon
+    len = t_horizon
+    max_As = problem.max_As
+    Z_unscaled = StatsBase.reconstruct(problem.scaler, problem.Z)
+    U_desired = Z_unscaled[n+1:end, end]
+
     # for each of the m control inputs generate a sequence that alternates between 0 and 1. With probability p=0.75 that we remain at the previous value
     sequence = zeros(m, len)
     sequence[:, 1] = rand(rng, [0,1], m)
@@ -217,7 +226,23 @@ function markov_sequence(rng::MersenneTwister, len::Int64, m::Int64, p::Float64=
             end
         end
     end
-    return sequence        
+
+    U = sequence 
+    
+    # U is size (m, t_horizon)
+    # we need to scale each column of U so that the 1s correspond to max_As + U_desired and 0s correspond to U_desired - max_As
+    U = U .* 2 .* max_As .+ U_desired .- max_As
+
+    # Smooth U so that the changes between each step is less than delta_maxs
+    for i in 1:m
+        for j in 2:t_horizon
+            if abs(U[i, j] - U[i, j-1]) > problem.delta_maxs[i]
+                U[i, j] = U[i, j-1] + sign(U[i, j] - U[i, j-1]) * problem.delta_maxs[i]
+            end
+        end
+    end
+
+    return U        
 end
 
 function run_random(problem::InputOptimizationProblem)
@@ -233,22 +258,12 @@ function run_random(problem::InputOptimizationProblem)
     B_hat = problem.B_hat
     max_As = problem.max_As
 
-    Z_unscaled = StatsBase.reconstruct(problem.scaler, Z)
-    U_desired = Z_unscaled[n+1:end, end]
-
     # PRBS using specified seed and length
     # U = Matrix(hcat([collect(sequence(lfsr_instance, seed=rand(problem.rng, 1:100)+i, len=problem.t_horizon, output=Bool)) for i in 1:problem.m]...)')
     
     # Markov Sequence
-    U = markov_sequence(problem.rng, problem.t_horizon, problem.m)
+    U = markov_sequence(problem)
     
-    # U is size (m, t_horizon)
-    # we need to scale each column of U so that the 1s correspond to max_As + U_desired and 0s correspond to U_desired - max_As
-    @show size(U)
-    @show size(max_As)
-    @show size(U_desired)
-    U = U .* 2 .* max_As .+ U_desired .- max_As
-
     control_traj = U
     control_traj = StatsBase.transform(problem.scaler, vcat(zeros(n, t_horizon), control_traj))
     control_traj = control_traj[n+1:end, :]

@@ -27,8 +27,8 @@ function Plots.plot(problem::InputOptimizationProblem, Z_planned::Matrix{Float64
     plts = []
     labels = ["throt", "ele", "ail", "rud"]
     for i in n+1:n+m
-        plot(times, Z_unscaled[i, :], label=labels[i-13])
-        plt = plot!(execution_times, Z_planned_unscaled[i, n_t+1:end], label=labels[i-13], linestyle=:dash)
+        plot(times, Z_unscaled[i, :], label=labels[i-problem.n])
+        plt = plot!(execution_times, Z_planned_unscaled[i, n_t+1:end], label=labels[i-problem.n], linestyle=:dash)
         push!(plts, plt)
     end
     plt = plot(plts..., layout=(4, 1), size=(800, 800), margin=5mm)
@@ -66,7 +66,7 @@ function Plots.plot(problem::InputOptimizationProblem, Z_planned::Matrix{Float64
     Z_predicted_unscaled = StatsBase.reconstruct(problem.scaler, Z_predicted)
 
     plts = []
-    labels = ["vt", "alpha", "beta", "phi", "theta", "psi", "P", "Q", "R", "pn", "pe", "h", "pow"]
+    labels = ["vt", "alpha", "beta", "phi", "theta", "psi", "P", "Q", "R", "pn", "pe", "h", "pow", "Nz"]
     for i in 1:length(labels)
         plot(times, Z_unscaled[i, :], label=labels[i], title=labels[i])
         plot!(execution_times, Z_planned_unscaled[i, n_t+1:end], label="planned", linestyle=:dash)
@@ -77,21 +77,21 @@ function Plots.plot(problem::InputOptimizationProblem, Z_planned::Matrix{Float64
         plt = plot!(times_actual, Z_actual_unscaled[i, :], label="actual", linestyle=:dot)
         push!(plts, plt)
     end
-    plt = plot(plts..., layout=(7, 2), size=(800, 800), margin=5mm, legend=false)
+    plt = plot(plts..., layout=(7, 2), size=(1600, 1600), margin=5mm, legend=false)
     savefig("/Users/joshuaott/Downloads/plot.pdf")
 
     # plot controls 
     plts = []
     labels = ["throt", "ele", "ail", "rud"]
     for i in n+1:n+m
-        plot(times, Z_unscaled[i, :], label=labels[i-13])
-        plot!(execution_times, Z_planned_unscaled[i, n_t+1:end], label=labels[i-13], linestyle=:dash)
+        plot(times, Z_unscaled[i, :], label=labels[i-problem.n])
+        plot!(execution_times, Z_planned_unscaled[i, n_t+1:end], label=labels[i-problem.n], linestyle=:dash)
         # plot safe bounds as dashed horizontal lines
         plot!([times[1], times_actual[end]], [safe_bounds_unscaled[i, 1], safe_bounds_unscaled[i, 1]], label="lower bound", linestyle=:dash, color=:black)
         plot!([times[1], times_actual[end]], [safe_bounds_unscaled[i, 2], safe_bounds_unscaled[i, 2]], label="upper bound", linestyle=:dash, color=:black)
-        plt = plot!(times_actual, Z_actual_unscaled[i, :], label=labels[i-13], linestyle=:dot)
+        plt = plot!(times_actual, Z_actual_unscaled[i, :], label=labels[i-problem.n], linestyle=:dot)
         push!(plts, plt)
     end
-    plt = plot(plts..., layout=(4, 1), size=(800, 800), margin=5mm, legend=false)
+    plt = plot(plts..., layout=(4, 1), size=(1600, 1600), margin=5mm, legend=false)
     savefig("/Users/joshuaott/Downloads/plot_controls.pdf")
 end

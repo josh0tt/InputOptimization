@@ -5,6 +5,7 @@ function run_f16_waypoint_sim(gif=false)
     import math
     import numpy as np
     from numpy import deg2rad
+    import matplotlib.pyplot as plt
 
     from aerobench.run_f16_sim import run_f16_sim
     from aerobench.visualize import anim3d, plot
@@ -25,32 +26,58 @@ function run_f16_waypoint_sim(gif=false)
         vt = 540          # initial velocity (ft/sec)
         phi = 0           # Roll angle from wings level (rad)
         theta = 0         # Pitch angle from nose level (rad)
-        psi = math.pi/8   # Yaw angle from North (rad)
+        psi = 0           # Yaw angle from North (rad)
 
         # Build Initial Condition Vectors
         # state = [vt, alpha, beta, phi, theta, psi, P, Q, R, pn, pe, h, pow]
         init = [vt, alpha, beta, phi, theta, psi, 0, 0, 0, 0, 0, alt, power]
 
         # make waypoint list
-        e_pt = 1000
-        n_pt = 3000
-        h_pt = 4000
+        # e_pt = 1000
+        # n_pt = 3000
+        # h_pt = 4000
 
         # tmax = 200 # simulation time
         # waypoints = [[e_pt, n_pt, h_pt],
         #             [e_pt + 2000, n_pt + 5000, h_pt - 100],
         #             [e_pt - 2000, n_pt + 15000, h_pt - 250],
         #             [e_pt - 500, n_pt + 25000, h_pt]]
-        tmax = 200 # simulation time
-        waypoints = [[e_pt, n_pt, h_pt],
-                    [e_pt + 2000, n_pt + 5000, h_pt - 100],
-                    [e_pt, n_pt + 25000, h_pt - 2500],
-                    [e_pt - 25000, n_pt + 30000, h_pt + 200],
-                    [e_pt - 20000, n_pt + 35000, h_pt]]
+        tmax = 300 # simulation time
+        # waypoints = [[e_pt, n_pt, h_pt],
+        #             [e_pt + 2000, n_pt + 5000, h_pt - 100],
+        #             [e_pt, n_pt + 25000, h_pt - 2500],
+        #             [e_pt - 25000, n_pt + 30000, h_pt + 200],
+        #             [e_pt - 20000, n_pt + 35000, h_pt]]
+        e_pt = 0
+        n_pt = 0
+        h_pt = alt
+        # waypoints = [[e_pt, n_pt + 5000, h_pt + 1000],
+        #         [e_pt, n_pt + 10000, h_pt],
+        #         [e_pt, n_pt + 15000, h_pt - 1000],
+        #         [e_pt, n_pt + 20000, h_pt],
+        #         [e_pt + 10000, n_pt + 20000, h_pt],
+        #         [e_pt + 20000, n_pt + 20000, h_pt],
+        #         [e_pt + 35000, n_pt + 20000, h_pt+1000]]
+        waypoints = [[e_pt, n_pt + 5000, h_pt + 1000],
+                     [e_pt, n_pt + 10000, h_pt],
+                     [e_pt, n_pt + 15000, h_pt - 1000],
+                     [e_pt, n_pt + 20000, h_pt],
+                     [e_pt, n_pt + 25000, h_pt + 1000],
+                     [e_pt, n_pt + 30000, h_pt],
+                     [e_pt, n_pt + 35000, h_pt - 1000],
+                     [e_pt, n_pt + 40000, h_pt],
+                     [e_pt + 10000, n_pt + 40000, h_pt],
+                     [e_pt + 20000, n_pt + 40000, h_pt],
+                     [e_pt + 30000, n_pt + 40000, h_pt+1000],
+                     [e_pt + 40000, n_pt + 40000, h_pt],
+                     [e_pt + 50000, n_pt + 40000, h_pt-1000],
+                     [e_pt + 70000, n_pt + 40000, h_pt]]
+
+
 
         ap = WaypointAutopilot(waypoints, stdout=True)
 
-        step = 1/30
+        step = 1/15
         extended_states = True
         u_seq = np.zeros((int(tmax / step)+1, 4))
         print("size of u_seq: ", u_seq.shape)
@@ -114,23 +141,37 @@ function run_f16_waypoint_sim(gif=false)
             anim_lines[1].set_3d_properties(done_zs)
 
         if gif:
+            plot.plot_overhead(res, waypoints=waypoints)
+            overhead_filename = 'waypoint_overhead.png'
+            plt.savefig(overhead_filename)
+            print(f"Made {overhead_filename}")
+            plt.close()
+
+            plot.plot_single(res, 'alt', title='Altitude (ft)')
+            alt_filename = 'waypoint_altitude.png'
+            plt.savefig(alt_filename)
+            print(f"Made {alt_filename}")
+            plt.close()
+
             anim3d.make_anim(res, filename, f16_scale=70, viewsize=5000, viewsize_z=4000, trail_pts=np.inf,
                             elev=27, azim=-107, skip_frames=skip_override,
                             chase=True, fixed_floor=True, init_extra=init_extra, update_extra=update_extra)
 
-        return res["times"], res["states"], np.array(res['u_list'])
+        return res["times"], res["states"], np.array(res['u_list']), np.array(res['Nz_list'])
 
     """
 
     # state is [vt, alpha, beta, phi, theta, psi, P, Q, R, pn, pe, h, pow]
     # u is: throt, ele, ail, rud, Nz_ref, ps_ref, Ny_r_ref
-    times, states, controls = py"simulate"(gif)
+    times, states, controls, Nz = py"simulate"(gif)
     
     # only keep the first 13 columns of states (the others are integration variables)
     states = states[:, 1:13]
     for i in 2:9
         states[:, i] = rad2deg(states[:, i])
     end
+    # include Nz in states 
+    states = hcat(states, Nz) 
 
     # only keep the first 4 columns of controls
     controls = controls[:, 1:4]
@@ -168,7 +209,7 @@ function run_f16_sim(problem::InputOptimizationProblem, Z_planned::Matrix{Float6
     from aerobench.visualize import anim3d, plot
     from aerobench.examples.straight_and_level.run import StraightAndLevelAutopilot
 
-    def simulate(init, alt, u_seq, tmax, gif, step = 1/30):
+    def simulate(init, alt, u_seq, tmax, gif, step = 1/15):
         ap = StraightAndLevelAutopilot(alt)
         extended_states = True
         res = run_f16_sim(init, tmax, ap, u_seq, step=step, extended_states=extended_states, integrator_str='rk45')
@@ -176,16 +217,18 @@ function run_f16_sim(problem::InputOptimizationProblem, Z_planned::Matrix{Float6
         if gif:
             filename = 'straight_and_level.gif'
             anim3d.make_anim(res, filename, elev=15, azim=-150, skip_frames=15)    
-        return res["times"], res["states"], np.array(res['u_list'])
+        return res["times"], res["states"], np.array(res['u_list']), np.array(res['Nz_list'])
     """
 
-    times, states, controls = py"simulate"(init, alt, u_seq, round(Int64, problem.t_horizon * problem.Δt), gif)
+    times, states, controls, Nz = py"simulate"(init, alt, u_seq, round(Int64, problem.t_horizon * problem.Δt), gif)
 
     # only keep the first 13 columns of states (the others are integration variables)
     states = states[:, 1:13]
     for i in 2:9
         states[:, i] = rad2deg(states[:, i])
     end
+    # include Nz in states
+    states = hcat(states, Nz)
 
     # only keep the first 4 columns of controls
     controls = controls[:, 1:4]
