@@ -1,7 +1,7 @@
 using JLD2
 using ProgressMeter
 
-include("InputOptimization.jl")
+# include("InputOptimization.jl")
 
 mutable struct SimData
     problem::InputOptimizationProblem
@@ -116,5 +116,3 @@ function run_experiments()
     JLD2.save("orthog_data.jld2", "orthog_data", orthog_data)
     JLD2.save("random_data.jld2", "random_data", random_data)
 end
-
-run_experiments()

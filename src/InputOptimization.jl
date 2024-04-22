@@ -1,3 +1,5 @@
+module InputOptimization
+
 using Parameters
 using PyCall
 using StatsBase
@@ -33,12 +35,13 @@ struct RandomSequence <: SolutionMethod end
 end
 
 include("run_f16.jl")
-include("helpers.jl")
 include("setup.jl")
-include("convex_concave.jl")
-include("orthogonal_multisines.jl")
-include("random.jl")
-include("plotting.jl")
+include("utilities/helpers.jl")
+include("methods/convex_concave.jl")
+include("methods/orthogonal_multisines.jl")
+include("methods/random.jl")
+include("utilities/plotting.jl")
+include("run_experiments.jl")
 
 function solve(problem::InputOptimizationProblem, method::ConvexConcave)
     println("Solving with Convex Concave")
@@ -71,3 +74,17 @@ end
 
 # times_actual, Z_actual = run_f16_sim(problem, Z_planned)
 # plot(problem, Z_planned, Z_actual, times_actual .+ problem.times[end])
+
+export InputOptimizationProblem
+       ConvexConcave, 
+       ConvexConcaveSDP, 
+       OrthogonalMultisine, 
+       RandomSequence, 
+       solve,
+       problem_setup,
+       run_f16_sim,
+       run_f16_waypoint_sim,
+       SimData,
+       run_experiments
+
+end

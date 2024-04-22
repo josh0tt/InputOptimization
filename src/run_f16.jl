@@ -91,7 +91,7 @@ function run_f16_waypoint_sim(gif=false)
         if filename.endswith('.mp4'):
             skip_override = 4
         elif filename.endswith('.gif'):
-            skip_override = 15
+            skip_override = 8 #15
         else:
             skip_override = 30
     
