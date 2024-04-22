@@ -41,7 +41,10 @@ include("methods/convex_concave.jl")
 include("methods/orthogonal_multisines.jl")
 include("methods/random.jl")
 include("utilities/plotting.jl")
+include("utilities/xplane_utils.jl")
 include("run_experiments.jl")
+include("run_xplane.jl")
+
 
 function solve(problem::InputOptimizationProblem, method::ConvexConcave)
     println("Solving with Convex Concave")
@@ -85,6 +88,7 @@ export InputOptimizationProblem
        run_f16_sim,
        run_f16_waypoint_sim,
        SimData,
-       run_experiments
+       run_experiments,
+       run_xplane
 
 end
