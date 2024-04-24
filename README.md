@@ -11,13 +11,15 @@ Navigate to `path/to/InputOptimization`
 using InputOptimization
 ```
 
-To run the experiments:
+To run the experiments with the Aerobench simulator:
 ```julia
 julia> InputOptimization.run_experiments()
 ```
 
 To run X-Plane, first open X-Plane and load a new flight. Then
-```julia
+```julia --threads 1,8
+] activate .
+using InputOptimization
 julia> InputOptimization.run_xplane()
 ```
 and follow instructions in the terminal. Make sure you have the relevant .sit file loaded in `/path/to/X-Plane 11/Output/situations/short_cessna.sit`

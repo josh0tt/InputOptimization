@@ -5,7 +5,7 @@ using Gurobi
 using Interpolations
 using Distributions
 
-function build_model(safe_bounds::Matrix{Float64}, Z_t::Matrix{Float64}, A_hat::Matrix{Float64}, B_hat::Matrix{Float64}, n::Int64, m::Int64, n_t::Int64, t_horizon::Int64, Z_cur::Matrix{Float64}, Sigma_0_inv::Matrix{Float64}, scaler::UnitRangeTransform{Float64,Vector{Float64}}, delta_maxs::Vector{Float64}, method::String)
+function build_model(safe_bounds::Matrix{Float64}, Z_t::Matrix{Float64}, A_hat::Matrix{Float64}, B_hat::Matrix{Float64}, n::Int64, m::Int64, n_t::Int64, t_horizon::Int64, Z_cur::Matrix{Float64}, Sigma_0_inv::Matrix{Float64}, scaler::UnitRangeTransform{Float64,Vector{Float64}}, delta_maxs::Vector{Float64}, method::String, sim::String)
     if method == "SDP"
         model = Model(Mosek.Optimizer)
         @variable(model, Y[1:n+m, 1:n+m], PSD)
@@ -40,7 +40,6 @@ function build_model(safe_bounds::Matrix{Float64}, Z_t::Matrix{Float64}, A_hat::
         @constraint(model, Z[1:n, i+1] .== A_hat * Z[1:n, i] + B_hat * Z[n+1:end, i]) # Dynamics
         @constraint(model, Z[n+1:end, i] - Z[n+1:end, i+1] .<= delta_maxs) # Control variation
         @constraint(model, Z[n+1:end, i] - Z[n+1:end, i+1] .>= -delta_maxs)
-        # @constraint(model, Z[n+1:end, i+1] - Z[n+1:end, i] .<= delta_maxs)
     end
 
     upper_bounds = safe_bounds[:, 2]
@@ -50,17 +49,18 @@ function build_model(safe_bounds::Matrix{Float64}, Z_t::Matrix{Float64}, A_hat::
     @constraint(model, Z[valid_bounds, n_t+1:(n_t+t_horizon)] .<= upper_bounds[valid_bounds])
 
 
-    # add constraint that we want to end up with zero roll, pitch, and yaw
-    desired_end_state = zeros(n + m, 1)
-    desired_end_state = StatsBase.transform(scaler, desired_end_state)
-    println("Desired end state: ", desired_end_state)
-    # @constraint(model, Z[4:6, n_t+t_horizon] .== desired_end_state[4:6])
-    # @constraint(model, Z[2:9, n_t+t_horizon] .== desired_end_state[2:9])
+    if sim == "xplane"
+        # add constraint that we want to end up with zero roll, pitch, and yaw
+        desired_end_state = zeros(n + m, 1)
+        desired_end_state = StatsBase.transform(scaler, desired_end_state)
+        println("Desired end state: ", desired_end_state)
+        @constraint(model, Z[1:3, n_t+t_horizon] .== desired_end_state[1:3])
+    end
 
     return model
 end
 
-function plan_control_inputs(problem::InputOptimizationProblem, method::String="approx")
+function plan_control_inputs(problem::InputOptimizationProblem, method::String="approx", sim::String="aerobench")
     plan_time = time()
 
     safe_bounds = problem.safe_bounds
@@ -94,7 +94,7 @@ function plan_control_inputs(problem::InputOptimizationProblem, method::String="
     Z_ctrl_val = Nothing
 
     build_time = time()
-    model = build_model(safe_bounds, Z_t, A_hat, B_hat, n, m, n_t, t_horizon, Z_cur, Sigma_0_inv, scaler, delta_maxs, method)
+    model = build_model(safe_bounds, Z_t, A_hat, B_hat, n, m, n_t, t_horizon, Z_cur, Sigma_0_inv, scaler, delta_maxs, method, sim)
     build_end_time = time()
     println("Time spent in build_model: ", build_end_time - build_time)
 
@@ -109,15 +109,11 @@ function plan_control_inputs(problem::InputOptimizationProblem, method::String="
         # Check solver status and update Z_cur if feasible
         println("Solver status: ", termination_status(model))
         if termination_status(model) == MOI.INFEASIBLE_OR_UNBOUNDED
-            println("Infeasible problem. Stabilizing aircraft...")
-            @warn("Infeasible problem. Stabilizing aircraft...")
-            # stable_control_traj = stabilize_aircraft(safe_bounds, times, Z_t, scaler, start_time, t0, t_horizon, n, m, t, A_hat, B_hat, delta_max)
-            # Z_ctrl_val = zeros(n + m, t_horizon)
-            # Z_ctrl_val[n+1:end, :] .= stable_control_traj
-            # unscaled_Z_ctrl = StatsBase.reconstruct(scaler, Z_ctrl_val)
-            # control_traj = unscaled_Z_ctrl[n+1:end, :]'
-
-            # return control_traj, zeros(n + m, T), execution_times, true
+            if sim == "xplane"
+                return nothing, true
+            else
+                return @error("Infeasible problem. Exiting...")
+            end
         end
 
         # Check solver status and update Z_cur if feasible
@@ -149,8 +145,11 @@ function plan_control_inputs(problem::InputOptimizationProblem, method::String="
 
     end_time = time()
     println("Time spent in plan_control_inputs: ", end_time - plan_time)
-    # return control_traj, Z_cur, false
-    return Z_cur
+    if sim == "xplane"
+        return Z_cur, false
+    else
+        return Z_cur
+    end
 end
 
 

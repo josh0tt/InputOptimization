@@ -80,8 +80,8 @@ function run_xplane()
         end
     end
 
-    function plan_trajectory(shared_data::SharedData, safe_bounds::Matrix{Float64}, scaler::UnitRangeTransform{Float64, Vector{Float64}}, t_horizon::Int, n::Int64, m::Int64, t::Int64)
-
+    function plan_trajectory(shared_data::SharedData, problem::InputOptimizationProblem)
+        safe_bounds, scaler, t_horizon, n, m, n_t = problem.safe_bounds, problem.scaler, problem.t_horizon, problem.n, problem.m, problem.n_t
         t0 = shared_data.t0
         start_time = shared_data.start_time
         data_copy = deepcopy(shared_data.flight_data)
@@ -99,17 +99,23 @@ function run_xplane()
 
                 Z_t = data_copy.Z_t
                 times = data_copy.times
-                t = size(Z_t, 2)
+                n_t = size(Z_t, 2)
 
                 println("HERE 1")
-                control_traj, Z_cur, execution_times, infeasible_flag = plan_control_inputs(safe_bounds, times, Z_t, scaler, start_time, t0, t_horizon, n, m, t)
-
-
-                if !infeasible_flag
+                A_hat, B_hat, Z_t, _, execution_times = estimate_linear_system(times, Z_t, t_horizon, start_time, t0, n, m)
+                problem = InputOptimizationProblem(problem.rng, Z_t, scaler, times, A_hat, B_hat, problem.n, problem.m, n_t, problem.t_horizon, mean(diff(execution_times)), problem.safe_bounds, problem.safe_bounds_unscaled, problem.delta_maxs, problem.max_As, problem.f_min, problem.f_max, problem.row_names)
+                Z_cur, infeasible_flag = plan_control_inputs(problem, "approx", "xplane")
+                if infeasible_flag
+                    @warn("Infeasible problem. Stabilizing aircraft...")    
+                    stable_control_traj = stabilize_aircraft(problem.safe_bounds, problem.times, problem.Z_t, problem.scaler, start_time, t0, problem.t_horizon, problem.n, problem.m, problem.t, problem.A_hat, problem.B_hat, problem.delta_maxs)
+                    control_traj = StatsBase.reconstruct(scaler, vcat(zeros(problem.n, problem.t_horizon), stable_control_traj))[problem.n+1:end, :]'
+                else
+                    control_traj = StatsBase.reconstruct(scaler, Z_cur[:, problem.n_t+1:end])[problem.n+1:end, :]'
+                    # control_traj, Z_cur, execution_times, infeasible_flag = plan_control_inputs(safe_bounds, times, Z_t, scaler, start_time, t0, t_horizon, n, m, n_t)
                     println("HERE 2")
                     lock(lk)
                     try
-                        shared_data.planned_data = PlannedData(Z_cur[:, t:end], execution_times)
+                        shared_data.planned_data = PlannedData(Z_cur[:, n_t:end], execution_times)
                     finally
                         unlock(lk)
                     end
@@ -172,7 +178,7 @@ function run_xplane()
                 planned_traj = plot_data_copy.planned_data.planned_traj
                 planned_times = plot_data_copy.planned_data.planned_times
 
-                t = size(real_trajs, 2)
+                n_t = size(real_trajs, 2)
 
                 # check if planned trajectory is empty
                 if !isempty(planned_times)
@@ -186,8 +192,8 @@ function run_xplane()
                 end
 
                 for i in 1:n_traces
-                    plts[i+n_traces][:x] = real_times[plt_t0-h:t]
-                    plts[i+n_traces][:y] = real_trajs[i, plt_t0-h:t]
+                    plts[i+n_traces][:x] = real_times[plt_t0-h:n_t]
+                    plts[i+n_traces][:y] = real_trajs[i, plt_t0-h:n_t]
                 end
 
                 for i in 1:n_traces
@@ -200,8 +206,8 @@ function run_xplane()
                     plts[i+3*n_traces][:y] = [safe_bounds[i, 2], safe_bounds[i, 2]]
                 end
 
-                obj_hist = compute_obj_hist(n, m, t, real_trajs[:, 1:t])
-                plts[4*n_traces+1][:x] = real_times[1:t]
+                obj_hist = compute_obj_hist(n, m, n_t, real_trajs[:, 1:n_t])
+                plts[4*n_traces+1][:x] = real_times[1:n_t]
                 plts[4*n_traces+1][:y] = obj_hist
 
                 # Use `react!` to update the plot with new data
@@ -226,7 +232,7 @@ function run_xplane()
 
     t_horizon = 25
     if include_forces
-        safe_bounds = [-30 30;       # Roll 1
+        safe_bounds_unscaled = [-30 30;       # Roll 1
                     -25 25;          # Pitch 2
                     -10 10;          # Yaw 3 
                     -10 10;          # Roll Rate 4 
@@ -247,7 +253,7 @@ function run_xplane()
                     -1 1;            # Rudder 19
                      0 1]            # Throttle 20
     else
-        safe_bounds = [-30 30;       # Roll 1
+        safe_bounds_unscaled = [-30 30;       # Roll 1
                     -25 25;          # Pitch 2
                     -10 10;          # Yaw 3
                     -10 10;          # Roll Rate 4
@@ -374,7 +380,7 @@ function run_xplane()
     #################################################################
 
     # Load data
-    safe_bounds, times, Z_t, titles, scaler, n, m, n_t = load_human_flown_data(safe_bounds, include_forces)
+    safe_bounds, times, Z_t, titles, scaler, n, m, n_t = load_human_flown_data(safe_bounds_unscaled, include_forces)
     
     p, plts, layout, plt_t0, n_traces, obj_hist = initialize_plots(safe_bounds, times, Z_t, titles, n, m, include_forces)
 
@@ -382,8 +388,11 @@ function run_xplane()
     start_time = time()
 
     # call plan_control_inputs once here to precompile the function
-    # problem = InputOptimizationProblem(MersenneTwister(12345), Z_t, scaler, times, A_hat, B_hat, n, m, n_t, t_horizon,  
-    _, _, _, _ = plan_control_inputs(safe_bounds, times, Z_t, scaler, start_time, t0, t_horizon, n, m, n_t)
+    A_hat, B_hat, Z_t, _, execution_times = estimate_linear_system(times, Z_t, t_horizon, start_time, t0, n, m)
+    max_As = find_max_As(n, m, StatsBase.reconstruct(scaler, Z_t), safe_bounds_unscaled)
+    delta_maxs = 0.01 .* ones(m)
+    problem = InputOptimizationProblem(MersenneTwister(12345), Z_t, scaler, times, A_hat, B_hat, n, m, n_t, t_horizon, mean(diff(times)), safe_bounds, safe_bounds_unscaled, delta_maxs, max_As, 0.1, 1.7, titles)   
+    _, _ = plan_control_inputs(problem, "approx", "xplane")
 
     shared_data = SharedData(FlightData(Z_t, times), PlannedData(Matrix{Float64}(undef,0,0), Vector{Float64}()), t0, start_time)
     
@@ -395,7 +404,7 @@ function run_xplane()
 
     # Start data collection and trajectory replanning
     data_task = Threads.@spawn collect_data(shared_data, scaler, include_forces)
-    replan_task = Threads.@spawn plan_trajectory(shared_data, safe_bounds, scaler, t_horizon, n, m, n_t)
+    replan_task = Threads.@spawn plan_trajectory(shared_data, problem)
     plot_task = Threads.@spawn plot_data(shared_data, safe_bounds, p, plts, layout, plt_t0, n_traces, obj_hist, n, m)
 
     wait(data_task)
