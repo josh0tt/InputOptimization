@@ -116,3 +116,19 @@ function run_experiments()
     JLD2.save("orthog_data.jld2", "orthog_data", orthog_data)
     JLD2.save("random_data.jld2", "random_data", random_data)
 end
+
+function make_gifs(t_horizon_mult = 2)
+    problem = problem_setup()
+    @show problem.t_horizon
+    problem.t_horizon = problem.t_horizon * t_horizon_mult
+    @show problem.t_horizon
+    method_names_dict = Dict(ConvexConcave() => "ccp",
+                             ConvexConcaveSDP() => "ccp_sdp",
+                             OrthogonalMultisine() => "orthog",
+                             RandomSequence() => "random")
+    for method in [ConvexConcave(), ConvexConcaveSDP(), OrthogonalMultisine(), RandomSequence()]
+        Z_planned = solve(problem, method)
+        times_actual, Z_actual = run_f16_sim(problem, Z_planned, method_names_dict[method], true)
+    end
+end
+

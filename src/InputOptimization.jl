@@ -13,7 +13,7 @@ struct ConvexConcaveSDP <: SolutionMethod end
 struct OrthogonalMultisine <: SolutionMethod end
 struct RandomSequence <: SolutionMethod end
 
-@with_kw struct InputOptimizationProblem
+@with_kw mutable struct InputOptimizationProblem
     rng::MersenneTwister                                # random number generator
     Z::Matrix{Float64}                                  # (n+m) x t observed data
     scaler::UnitRangeTransform{Float64,Vector{Float64}} # scaler used to scale the data
@@ -87,6 +87,7 @@ export InputOptimizationProblem
        problem_setup,
        run_f16_sim,
        run_f16_waypoint_sim,
+       make_gifs,
        SimData,
        run_experiments,
        run_xplane

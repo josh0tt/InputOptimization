@@ -182,7 +182,7 @@ function run_f16_waypoint_sim(gif=false)
     return times, states, controls
 end
 
-function run_f16_sim(problem::InputOptimizationProblem, Z_planned::Matrix{Float64}, gif=false)
+function run_f16_sim(problem::InputOptimizationProblem, Z_planned::Matrix{Float64}, method_name::String="none", gif=false)
     n_t = problem.n_t
     Z_planned_unscaled = StatsBase.reconstruct(problem.scaler, Z_planned)
     # we go from n_t to end because the first value was the last control input from the collected data
@@ -209,18 +209,17 @@ function run_f16_sim(problem::InputOptimizationProblem, Z_planned::Matrix{Float6
     from aerobench.visualize import anim3d, plot
     from aerobench.examples.straight_and_level.run import StraightAndLevelAutopilot
 
-    def simulate(init, alt, u_seq, tmax, gif, step = 1/15):
+    def simulate(init, alt, u_seq, tmax, gif, filename, step = 1/15):
         ap = StraightAndLevelAutopilot(alt)
         extended_states = True
         res = run_f16_sim(init, tmax, ap, u_seq, step=step, extended_states=extended_states, integrator_str='rk45')
 
         if gif:
-            filename = 'straight_and_level.gif'
             anim3d.make_anim(res, filename, elev=15, azim=-150, skip_frames=15)    
         return res["times"], res["states"], np.array(res['u_list']), np.array(res['Nz_list'])
     """
-
-    times, states, controls, Nz = py"simulate"(init, alt, u_seq, round(Int64, problem.t_horizon * problem.Δt), gif)
+    filename = method_name != "none" ? "straight_and_level_$method_name.gif" : "straight_and_level.gif"
+    times, states, controls, Nz = py"simulate"(init, alt, u_seq, round(Int64, problem.t_horizon * problem.Δt), gif, filename)
 
     # only keep the first 13 columns of states (the others are integration variables)
     states = states[:, 1:13]
