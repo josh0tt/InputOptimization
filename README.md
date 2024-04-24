@@ -17,7 +17,8 @@ julia> InputOptimization.run_experiments()
 ```
 
 To run X-Plane, first open X-Plane and load a new flight. Then
-```julia --threads 1,8
+```julia 
+julia --threads 1,8
 ] activate .
 using InputOptimization
 julia> InputOptimization.run_xplane()
