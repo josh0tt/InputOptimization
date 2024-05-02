@@ -8,7 +8,7 @@ using JLD2
 using PlotlyJS
 
 struct FlightData
-    Z_t::Matrix{Float64}
+    Z_k::Matrix{Float64}
     times::Vector{Float64}
 end
 
@@ -59,11 +59,11 @@ function run_xplane()
             lock(lk)
             try
                 times = shared_data.flight_data.times
-                Z_t = shared_data.flight_data.Z_t
+                Z_k = shared_data.flight_data.Z_k
                 
                 times = vcat(times, time_)      # Append to times
-                Z_t = hcat(Z_t, combined_data)  # Append to Z_t
-                shared_data.flight_data = FlightData(Z_t, times)
+                Z_k = hcat(Z_k, combined_data)  # Append to Z_k
+                shared_data.flight_data = FlightData(Z_k, times)
             finally
                 unlock(lk)
             end
@@ -97,21 +97,21 @@ function run_xplane()
                     unlock(lk)
                 end
 
-                Z_t = data_copy.Z_t
+                Z_k = data_copy.Z_k
                 times = data_copy.times
-                n_t = size(Z_t, 2)
+                n_t = size(Z_k, 2)
 
                 println("HERE 1")
-                A_hat, B_hat, Z_t, _, execution_times = estimate_linear_system(times, Z_t, t_horizon, start_time, t0, n, m)
-                problem = InputOptimizationProblem(problem.rng, Z_t, scaler, times, A_hat, B_hat, problem.n, problem.m, n_t, problem.t_horizon, mean(diff(execution_times)), problem.safe_bounds, problem.safe_bounds_unscaled, problem.delta_maxs, problem.max_As, problem.f_min, problem.f_max, problem.row_names)
+                A_hat, B_hat, Z_k, _, execution_times = estimate_linear_system(times, Z_k, t_horizon, start_time, t0, n, m)
+                problem = InputOptimizationProblem(problem.rng, Z_k, scaler, times, A_hat, B_hat, problem.n, problem.m, n_t, problem.t_horizon, mean(diff(execution_times)), problem.safe_bounds, problem.safe_bounds_unscaled, problem.delta_maxs, problem.max_As, problem.f_min, problem.f_max, problem.row_names)
                 Z_cur, infeasible_flag = plan_control_inputs(problem, "approx", "xplane")
                 if infeasible_flag
                     @warn("Infeasible problem. Stabilizing aircraft...")    
-                    stable_control_traj = stabilize_aircraft(problem.safe_bounds, problem.times, problem.Z_t, problem.scaler, start_time, t0, problem.t_horizon, problem.n, problem.m, problem.t, problem.A_hat, problem.B_hat, problem.delta_maxs)
+                    stable_control_traj = stabilize_aircraft(problem.safe_bounds, problem.times, problem.Z_k, problem.scaler, start_time, t0, problem.t_horizon, problem.n, problem.m, problem.t, problem.A_hat, problem.B_hat, problem.delta_maxs)
                     control_traj = StatsBase.reconstruct(scaler, vcat(zeros(problem.n, problem.t_horizon), stable_control_traj))[problem.n+1:end, :]'
                 else
                     control_traj = StatsBase.reconstruct(scaler, Z_cur[:, problem.n_t+1:end])[problem.n+1:end, :]'
-                    # control_traj, Z_cur, execution_times, infeasible_flag = plan_control_inputs(safe_bounds, times, Z_t, scaler, start_time, t0, t_horizon, n, m, n_t)
+                    # control_traj, Z_cur, execution_times, infeasible_flag = plan_control_inputs(safe_bounds, times, Z_k, scaler, start_time, t0, t_horizon, n, m, n_t)
                     println("HERE 2")
                     lock(lk)
                     try
@@ -172,7 +172,7 @@ function run_xplane()
                     unlock(lk)
                 end
 
-                real_trajs = plot_data_copy.flight_data.Z_t
+                real_trajs = plot_data_copy.flight_data.Z_k
                 real_times = plot_data_copy.flight_data.times
 
                 planned_traj = plot_data_copy.planned_data.planned_traj
@@ -380,21 +380,21 @@ function run_xplane()
     #################################################################
 
     # Load data
-    safe_bounds, times, Z_t, titles, scaler, n, m, n_t = load_human_flown_data(safe_bounds_unscaled, include_forces)
+    safe_bounds, times, Z_k, titles, scaler, n, m, n_t = load_human_flown_data(safe_bounds_unscaled, include_forces)
     
-    p, plts, layout, plt_t0, n_traces, obj_hist = initialize_plots(safe_bounds, times, Z_t, titles, n, m, include_forces)
+    p, plts, layout, plt_t0, n_traces, obj_hist = initialize_plots(safe_bounds, times, Z_k, titles, n, m, include_forces)
 
     t0 = times[end]
     start_time = time()
 
     # call plan_control_inputs once here to precompile the function
-    A_hat, B_hat, Z_t, _, execution_times = estimate_linear_system(times, Z_t, t_horizon, start_time, t0, n, m)
-    max_As = find_max_As(n, m, StatsBase.reconstruct(scaler, Z_t), safe_bounds_unscaled)
+    A_hat, B_hat, Z_k, _, execution_times = estimate_linear_system(times, Z_k, t_horizon, start_time, t0, n, m)
+    max_As = find_max_As(n, m, StatsBase.reconstruct(scaler, Z_k), safe_bounds_unscaled)
     delta_maxs = 0.01 .* ones(m)
-    problem = InputOptimizationProblem(MersenneTwister(12345), Z_t, scaler, times, A_hat, B_hat, n, m, n_t, t_horizon, mean(diff(times)), safe_bounds, safe_bounds_unscaled, delta_maxs, max_As, 0.1, 1.7, titles)   
+    problem = InputOptimizationProblem(MersenneTwister(12345), Z_k, scaler, times, A_hat, B_hat, n, m, n_t, t_horizon, mean(diff(times)), safe_bounds, safe_bounds_unscaled, delta_maxs, max_As, 0.1, 1.7, titles)   
     _, _ = plan_control_inputs(problem, "approx", "xplane")
 
-    shared_data = SharedData(FlightData(Z_t, times), PlannedData(Matrix{Float64}(undef,0,0), Vector{Float64}()), t0, start_time)
+    shared_data = SharedData(FlightData(Z_k, times), PlannedData(Matrix{Float64}(undef,0,0), Vector{Float64}()), t0, start_time)
     
     # Unpause X-Plane to start the episode
     py"client.pauseSim(False)"

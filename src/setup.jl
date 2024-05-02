@@ -20,6 +20,32 @@ function find_max_As(n::Int, m::Int, Z_unscaled::Matrix{Float64}, safe_bounds_un
 end
 
 """
+    fit_process_noise(Z::Matrix{Float64}, A_hat::Matrix{Float64}, B_hat::Matrix{Float64}, n::Int, m::Int)
+
+Fit process noise using maximum likelihood estimation.
+
+# Arguments
+- `Z::Matrix{Float64}`: The input matrix containing the state, control, and next state observations.
+- `A_hat::Matrix{Float64}`: The estimated state transition matrix.
+- `B_hat::Matrix{Float64}`: The estimated control matrix.
+- `n::Int`: The number of state variables.
+- `m::Int`: The number of control variables.
+
+# Returns
+- `𝒩`: The fitted process noise distribution.
+
+"""
+function fit_process_noise(Z::Matrix{Float64}, A_hat::Matrix{Float64}, B_hat::Matrix{Float64}, n::Int, m::Int)
+    x = Z[1:n, 1:end-1]
+    u = Z[n+1:end, 1:end-1]
+    xp = Z[1:n, 2:end]
+
+    𝒩 = fit_mle(MvNormal, xp - A_hat*x - B_hat*u)
+
+    return 𝒩
+end
+
+"""
     problem_setup()
 
 This function sets up the problem for input optimization. It performs the following steps:
@@ -87,7 +113,7 @@ function problem_setup()
     sines = max_As .* sin.(2*π*f_max .* times)' # should be m x n_t
     sines_scaled = StatsBase.transform(scaler, vcat(zeros(n, n_t), sines))
     sines_scaled = sines_scaled[n+1:end, :]
-    delta_maxs = [maximum(abs.(sines_scaled[i, 2:end] - sines_scaled[i, 1:end-1])) for i in 1:m]
+    delta_maxs = [mean(abs.(sines_scaled[i, 2:end] - sines_scaled[i, 1:end-1])) for i in 1:m] #[maximum(abs.(sines_scaled[i, 2:end] - sines_scaled[i, 1:end-1])) for i in 1:m]
     @show delta_maxs
 
     # scale the bounds as well
@@ -100,9 +126,10 @@ function problem_setup()
 
     # 3. estimate the linear system
     A_hat, B_hat = estimate_linear_system(Z, n)
+    𝒩 = fit_process_noise(Z, A_hat, B_hat, n, m)
 
     # 4. create the InputOptimizationProblem
-    problem = InputOptimizationProblem(rng, Z, scaler, times, A_hat, B_hat, n, m, n_t, t_horizon, Δt, safe_bounds, safe_bounds_unscaled, delta_maxs, max_As, f_min, f_max, ["vt", "alpha", "beta", "phi", "theta", "psi", "P", "Q", "R", "pn", "pe", "h", "pow", "throt", "ele", "ail", "rud"])
+    problem = InputOptimizationProblem(rng, Z, scaler, times, A_hat, B_hat, 𝒩, n, m, n_t, t_horizon, Δt, safe_bounds, safe_bounds_unscaled, delta_maxs, max_As, f_min, f_max, ["vt", "alpha", "beta", "phi", "theta", "psi", "P", "Q", "R", "pn", "pe", "h", "pow", "throt", "ele", "ail", "rud"])
 
     return problem
 end

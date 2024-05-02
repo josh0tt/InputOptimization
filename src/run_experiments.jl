@@ -12,7 +12,7 @@ mutable struct SimData
 end
 
 """
-    compute_sigma(Z_t::Matrix{Float64}, n::Int64)
+    compute_sigma(Z::Matrix{Float64}, n::Int64)
 
 Compute the standard deviation of the residual in a linear system.
 

@@ -76,8 +76,8 @@ class Autopilot(Freezable):
 
             l, u = self.llc.ctrlLimits.NzMin, self.llc.ctrlLimits.NzMax
             # create warning
-            if Nz < l or Nz > u:
-                print(f"WARNGING: autopilot commanded invalid Nz ({Nz}). Not in range [{l}, {u}] at time {t}")
+            # if Nz < l or Nz > u:
+                # print(f"WARNGING: autopilot commanded invalid Nz ({Nz}). Not in range [{l}, {u}] at time {t}")
             # assert l <= Nz <= u, f"autopilot commanded invalid Nz ({Nz}). Not in range [{l}, {u}]"
 
         return rv

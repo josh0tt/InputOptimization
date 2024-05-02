@@ -6,6 +6,7 @@ using StatsBase
 using Plots
 using Measures
 using Random
+using Distributions
 
 abstract type SolutionMethod end
 struct ConvexConcave <: SolutionMethod end
@@ -20,6 +21,7 @@ struct RandomSequence <: SolutionMethod end
     times::Vector{Float64}                              # t x 1 times at which data is observed
     A_hat::Matrix{Float64}                              # n x n estimated state matrix
     B_hat::Matrix{Float64}                              # n x m estimated control matrix
+    𝒩::FullNormal                                       # MVnormal distribution for process noise xp - Âx - B̂u
     n::Int                                              # number of state variables
     m::Int                                              # number of control variables
     n_t::Int                                            # number of time steps

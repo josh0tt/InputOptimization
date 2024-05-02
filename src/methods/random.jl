@@ -204,6 +204,44 @@ function sequence_detecterrors(t::MaxLFSR{LEN}, v::Vector{T}) where {LEN, T<:Num
     return _errors
 end
 
+function markov_sequence(rng::MersenneTwister, m::Int, t_horizon::Int, max_As::Vector{Float64}, p::Float64=0.75, delta_max::Float64=0.1)
+    len = t_horizon
+    U_desired = zeros(m, 1)
+
+    # for each of the m control inputs generate a sequence that alternates between 0 and 1. With probability p=0.75 that we remain at the previous value
+    sequence = zeros(m, len)
+    sequence[:, 1] = rand(rng, [0,1], m)
+    for i in 1:m
+        for j in 2:len
+            if rand(rng) < p
+                sequence[i, j] = sequence[i, j-1]
+            else
+                sequence[i, j] = sequence[i, j-1] == 0 ? 1 : 0
+            end
+        end
+    end
+
+    U = sequence 
+    
+    # U is size (m, t_horizon)
+    # we need to scale each column of U so that the 1s correspond to max_As + U_desired and 0s correspond to U_desired - max_As
+    U = U .* 2 .* max_As .+ U_desired .- max_As
+
+    # clip U[1,:] between 0 and 1
+    U[1,:] = clamp.(U[1,:], 0, 1)
+
+    # Smooth U so that the changes between each step is less than delta_maxs
+    for i in 1:m
+        for j in 2:t_horizon
+            if abs(U[i, j] - U[i, j-1]) > delta_max
+                U[i, j] = U[i, j-1] + sign(U[i, j] - U[i, j-1]) * delta_max
+            end
+        end
+    end
+
+    return U        
+end
+
 function markov_sequence(problem::InputOptimizationProblem, p::Float64=0.75)
     rng = problem.rng
     m = problem.m

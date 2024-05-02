@@ -36,11 +36,11 @@ function load_human_flown_data(safe_bounds::Matrix{Float64}, include_forces::Boo
     t = size(states, 1)
 
     # states and forces are read in with time as the first Dimension
-    # Z_t is shaped as (n+m,t) where n is the number of states and m is the number of controls
-    Z_t = hcat(states, controls)'
+    # Z_k is shaped as (n+m,t) where n is the number of states and m is the number of controls
+    Z_k = hcat(states, controls)'
 
-    scaler = fit(UnitRangeTransform, Z_t, dims=2)
-    Z_t = StatsBase.transform(scaler, Z_t)
+    scaler = fit(UnitRangeTransform, Z_k, dims=2)
+    Z_k = StatsBase.transform(scaler, Z_k)
 
     # Set bounds for states
     lower_bounds, upper_bounds = scale_bounds(scaler, safe_bounds, 1, n + m)
@@ -52,7 +52,7 @@ function load_human_flown_data(safe_bounds::Matrix{Float64}, include_forces::Boo
     end
     safe_bounds = new_safe_bounds
 
-    return safe_bounds, times, Z_t, titles, scaler, n, m, t
+    return safe_bounds, times, Z_k, titles, scaler, n, m, t
 end
 
 function get_execution_times(new_times::LinRange{Float64,Int64}, t_horizon::Int64, start_time::Float64, t0::Float64)
@@ -63,13 +63,13 @@ function get_execution_times(new_times::LinRange{Float64,Int64}, t_horizon::Int6
 end
 
 """
-    interpolate_data(times::Vector{Float64}, Z_t::Matrix{Float64}, t_horizon::Int64, start_time::Float64, t0::Float64, n::Int64, m::Int64)
+    interpolate_data(times::Vector{Float64}, Z_k::Matrix{Float64}, t_horizon::Int64, start_time::Float64, t0::Float64, n::Int64, m::Int64)
 
 Interpolates data using the given parameters.
 
 # Arguments
 - `times::Vector{Float64}`: A vector of time values.
-- `Z_t::Matrix{Float64}`: Observed data.
+- `Z_k::Matrix{Float64}`: Observed data.
 - `t_horizon::Int64`: The time horizon.
 - `start_time::Float64`: The start time.
 - `t0::Float64`: The initial time.
@@ -80,29 +80,29 @@ Interpolates data using the given parameters.
 - An interpolated data matrix.
 
 """
-function interpolate_data(times::Vector{Float64}, Z_t::Matrix{Float64}, t_horizon::Int64, start_time::Float64, t0::Float64, n::Int64, m::Int64)
+function interpolate_data(times::Vector{Float64}, Z_k::Matrix{Float64}, t_horizon::Int64, start_time::Float64, t0::Float64, n::Int64, m::Int64)
     # Interpolate data to have uniform time steps
     new_times = LinRange(times[1], times[end], length(times))
-    new_Z_t = zeros(size(Z_t))
+    new_Z_k = zeros(size(Z_k))
 
     for i in 1:n+m
-        interp = linear_interpolation(times, Z_t[i, :])
-        new_Z_t[i, :] = interp(new_times)
+        interp = linear_interpolation(times, Z_k[i, :])
+        new_Z_k[i, :] = interp(new_times)
     end
 
     execution_times = get_execution_times(new_times, t_horizon, start_time, t0)
 
-    return new_Z_t, new_times, execution_times
+    return new_Z_k, new_times, execution_times
 end
 
 """
-    estimate_linear_system(times::Vector{Float64}, Z_t::Matrix{Float64}, t_horizon::Int64, start_time::Float64, t0::Float64, n::Int64, m::Int64)
+    estimate_linear_system(times::Vector{Float64}, Z_k::Matrix{Float64}, t_horizon::Int64, start_time::Float64, t0::Float64, n::Int64, m::Int64)
 
 Estimates a linear system based on the given inputs.
 
 # Arguments
 - `times::Vector{Float64}`: A vector of time values.
-- `Z_t::Matrix{Float64}`: Observed data.
+- `Z_k::Matrix{Float64}`: Observed data.
 - `t_horizon::Int64`: The time horizon.
 - `start_time::Float64`: The start time.
 - `t0::Float64`: The initial time.
@@ -113,29 +113,29 @@ Estimates a linear system based on the given inputs.
 - The estimated linear system.
 
 """
-function estimate_linear_system(times::Vector{Float64}, Z_t::Matrix{Float64}, t_horizon::Int64, start_time::Float64, t0::Float64, n::Int64, m::Int64)
-    Z_t, new_times, execution_times = interpolate_data(times, Z_t, t_horizon, start_time, t0, n, m)
+function estimate_linear_system(times::Vector{Float64}, Z_k::Matrix{Float64}, t_horizon::Int64, start_time::Float64, t0::Float64, n::Int64, m::Int64)
+    Z_k, new_times, execution_times = interpolate_data(times, Z_k, t_horizon, start_time, t0, n, m)
 
-    p = size(Z_t, 2) - 1
-    X_prime = Z_t[1:n, 2:end]
+    p = size(Z_k, 2) - 1
+    X_prime = Z_k[1:n, 2:end]
 
     # Solve the linear system using pseudo-inverse
-    Theta = X_prime * pinv(Z_t[:, 1:p])
+    Theta = X_prime * pinv(Z_k[:, 1:p])
 
     A = Theta[:, 1:n]
     B = Theta[:, n+1:end]
 
-    return A, B, Z_t, new_times, execution_times
+    return A, B, Z_k, new_times, execution_times
 end
 
 # """
-#     build_model(safe_bounds::Matrix{Float64}, Z_t::Matrix{Float64}, A_hat::Matrix{Float64}, B_hat::Matrix{Float64}, n::Int64, m::Int64, t::Int64, T::Int64, Z_cur::Matrix{Float64}, Sigma_0_inv::Matrix{Float64}, scaler::UnitRangeTransform{Float64, Vector{Float64}}, delta_max::Float64, method::String)
+#     build_model(safe_bounds::Matrix{Float64}, Z_k::Matrix{Float64}, A_hat::Matrix{Float64}, B_hat::Matrix{Float64}, n::Int64, m::Int64, t::Int64, T::Int64, Z_cur::Matrix{Float64}, Sigma_0_inv::Matrix{Float64}, scaler::UnitRangeTransform{Float64, Vector{Float64}}, delta_max::Float64, method::String)
 
 # Builds a model using the given parameters.
 
 # # Arguments
 # - `safe_bounds::Matrix{Float64}`: The safe bounds matrix.
-# - `Z_t::Matrix{Float64}`: The Z_t matrix.
+# - `Z_k::Matrix{Float64}`: The Z_k matrix.
 # - `A_hat::Matrix{Float64}`: The A_hat matrix.
 # - `B_hat::Matrix{Float64}`: The B_hat matrix.
 # - `n::Int64`: The number of states.
@@ -152,7 +152,7 @@ end
 # - The built model.
 
 # """
-# function build_model(safe_bounds::Matrix{Float64}, Z_t::Matrix{Float64}, A_hat::Matrix{Float64}, B_hat::Matrix{Float64}, n::Int64, m::Int64, t::Int64, T::Int64, Z_cur::Matrix{Float64}, Sigma_0_inv::Matrix{Float64}, scaler::UnitRangeTransform{Float64,Vector{Float64}}, delta_max::Float64, method::String)
+# function build_model(safe_bounds::Matrix{Float64}, Z_k::Matrix{Float64}, A_hat::Matrix{Float64}, B_hat::Matrix{Float64}, n::Int64, m::Int64, t::Int64, T::Int64, Z_cur::Matrix{Float64}, Sigma_0_inv::Matrix{Float64}, scaler::UnitRangeTransform{Float64,Vector{Float64}}, delta_max::Float64, method::String)
 #     if method == "exact"
 #         model = Model(Mosek.Optimizer)
 #         @variable(model, Y[1:n+m, 1:n+m], PSD)
@@ -162,7 +162,7 @@ end
 
 #     @variable(model, Z_ctrl[1:n+m, 1:T-t])
 
-#     Z = [Z_t Z_ctrl]
+#     Z = [Z_k Z_ctrl]
 #     Z_diff = Z - Z_cur
 #     Z_diff_transpose = Z_diff'
 #     W_hat = Z_cur * Z_cur' + Z_cur * Z_diff_transpose + Z_diff * Z_cur' + Sigma_0_inv
@@ -176,7 +176,7 @@ end
 
 #     # Constraints
 #     # Initial Z matching
-#     @constraint(model, Z[:, 1:t] .== Z_t[:, 1:t])
+#     @constraint(model, Z[:, 1:t] .== Z_k[:, 1:t])
 
 #     # Dynamics and control constraints
 #     for i in t:T-1
@@ -206,14 +206,14 @@ end
 # end
 
 # """
-#     plan_control_inputs(safe_bounds, times, Z_t, scaler, start_time, t0, t_horizon, n, m, t, method="approx")
+#     plan_control_inputs(safe_bounds, times, Z_k, scaler, start_time, t0, t_horizon, n, m, t, method="approx")
 
 # Plan control inputs based on safe bounds, times, and other parameters.
 
 # # Arguments
 # - `safe_bounds::Matrix{Float64}`: The safe bounds for the control inputs.
 # - `times::Vector{Float64}`: The times at which data was observed.
-# - `Z_t::Matrix{Float64}`: Observed state and control data.
+# - `Z_k::Matrix{Float64}`: Observed state and control data.
 # - `scaler::UnitRangeTransform{Float64, Vector{Float64}}`: The scaler used to transform the state trajectories.
 # - `start_time::Float64`: The start time.
 # - `t0::Float64`: Initial observed data time.
@@ -227,16 +227,16 @@ end
 # - `control_inputs::Matrix{Float64}`: The planned control inputs.
 
 # """
-# function plan_control_inputs(safe_bounds::Matrix{Float64}, times::Vector{Float64}, Z_t::Matrix{Float64}, scaler::UnitRangeTransform{Float64,Vector{Float64}}, start_time::Float64, t0::Float64, t_horizon::Int64, n::Int64, m::Int64, t::Int64, method::String="approx")
+# function plan_control_inputs(safe_bounds::Matrix{Float64}, times::Vector{Float64}, Z_k::Matrix{Float64}, scaler::UnitRangeTransform{Float64,Vector{Float64}}, start_time::Float64, t0::Float64, t_horizon::Int64, n::Int64, m::Int64, t::Int64, method::String="approx")
 #     plan_time = time()
 
-#     A_hat, B_hat, Z_t, new_times, execution_times = estimate_linear_system(times, Z_t, t_horizon, start_time, t0, n, m)
+#     A_hat, B_hat, Z_k, new_times, execution_times = estimate_linear_system(times, Z_k, t_horizon, start_time, t0, n, m)
 
 #     T = t + t_horizon
 
 #     Sigma_0_inv = diagm(0 => ones(n + m)) # Assuming Sigma_0_inv is defined elsewhere
-#     # Z_cur = [Z_t Z_t[:, end] .+ zeros(n+m, t_horizon)]
-#     Z_cur = [Z_t Z_t[:, end] .+ rand(Normal(0, 1.0), n + m, t_horizon)]
+#     # Z_cur = [Z_k Z_k[:, end] .+ zeros(n+m, t_horizon)]
+#     Z_cur = [Z_k Z_k[:, end] .+ rand(Normal(0, 1.0), n + m, t_horizon)]
 #     max_iter = 10
 #     delta_max = 0.01
 #     tol = 1e-3
@@ -247,7 +247,7 @@ end
 #     Z_ctrl_val = Nothing
 
 #     build_time = time()
-#     model = build_model(safe_bounds, Z_t, A_hat, B_hat, n, m, t, T, Z_cur, Sigma_0_inv, scaler, delta_max, method)
+#     model = build_model(safe_bounds, Z_k, A_hat, B_hat, n, m, t, T, Z_cur, Sigma_0_inv, scaler, delta_max, method)
 #     build_end_time = time()
 #     println("Time spent in build_model: ", build_end_time - build_time)
 
@@ -264,7 +264,7 @@ end
 #         if termination_status(model) == MOI.INFEASIBLE_OR_UNBOUNDED
 #             println("Infeasible problem. Stabilizing aircraft...")
 #             @warn("Infeasible problem. Stabilizing aircraft...")
-#             stable_control_traj = stabilize_aircraft(safe_bounds, times, Z_t, scaler, start_time, t0, t_horizon, n, m, t, A_hat, B_hat, delta_max)
+#             stable_control_traj = stabilize_aircraft(safe_bounds, times, Z_k, scaler, start_time, t0, t_horizon, n, m, t, A_hat, B_hat, delta_max)
 #             Z_ctrl_val = zeros(n + m, t_horizon)
 #             Z_ctrl_val[n+1:end, :] .= stable_control_traj
 #             unscaled_Z_ctrl = StatsBase.reconstruct(scaler, Z_ctrl_val)
@@ -278,8 +278,8 @@ end
 #         push!(values, current_obj)
 
 #         Z_ctrl_val = value.(model[:Z_ctrl])
-#         Z_cur = [Z_t Z_ctrl_val]
-#         Z = [Z_t model[:Z_ctrl]]
+#         Z_cur = [Z_k Z_ctrl_val]
+#         Z = [Z_k model[:Z_ctrl]]
 
 #         # Update W_hat for model objective 
 #         Z_diff = Z - Z_cur
@@ -306,7 +306,7 @@ end
 # end
 
 
-function stabilize_aircraft(safe_bounds::Matrix{Float64}, times::Vector{Float64}, Z_t::Matrix{Float64}, scaler::UnitRangeTransform{Float64,Vector{Float64}}, start_time::Float64, t0::Float64, t_horizon::Int64, n::Int64, m::Int64, t::Int64, A_hat::Matrix{Float64}, B_hat::Matrix{Float64}, delta_max::Float64)
+function stabilize_aircraft(safe_bounds::Matrix{Float64}, times::Vector{Float64}, Z_k::Matrix{Float64}, scaler::UnitRangeTransform{Float64,Vector{Float64}}, start_time::Float64, t0::Float64, t_horizon::Int64, n::Int64, m::Int64, t::Int64, A_hat::Matrix{Float64}, B_hat::Matrix{Float64}, delta_max::Float64)
     # Using the current A_hat and B_hat, plan control inputs that drive the aircraft to the desired state
     roll_des = 0.0
     pitch_des = 0.0
@@ -329,8 +329,8 @@ function stabilize_aircraft(safe_bounds::Matrix{Float64}, times::Vector{Float64}
     @variable(model, x[1:n, 1:t_horizon+1])
 
     # Initial state conditions
-    @constraint(model, x[:, 1] .== Z_t[1:n, t])
-    @constraint(model, u[:, 1] .== Z_t[n+1:end, t])
+    @constraint(model, x[:, 1] .== Z_k[1:n, t])
+    @constraint(model, u[:, 1] .== Z_k[n+1:end, t])
 
     # Dynamics constraints over the prediction horizon
     for k in 1:t_horizon
@@ -362,14 +362,14 @@ end
 
 
 """
-    initialize_plots(safe_bounds::Matrix{Float64}, times::Vector{Float64}, Z_t::Matrix{Float64}, titles::Vector{String}, n::Int64, m::Int64, include_forces::Bool)
+    initialize_plots(safe_bounds::Matrix{Float64}, times::Vector{Float64}, Z_k::Matrix{Float64}, titles::Vector{String}, n::Int64, m::Int64, include_forces::Bool)
 
 Initialize and display a plot with subplots for visualizing data.
 
 # Arguments
 - `safe_bounds::Matrix{Float64}`: A matrix containing the lower and upper bounds.
 - `times::Vector{Float64}`: The times at which data was observed.
-- `Z_t::Matrix{Float64}`: Observed state and control data.
+- `Z_k::Matrix{Float64}`: Observed state and control data.
 - `titles::Vector{String}`: A vector of titles.
 - `n::Int64`: The number of states.
 - `m::Int64`: The number of control inputs.
@@ -384,7 +384,7 @@ Initialize and display a plot with subplots for visualizing data.
 - `obj_hist`: An array of objective values.
 
 """
-function initialize_plots(safe_bounds::Matrix{Float64}, times::Vector{Float64}, Z_t::Matrix{Float64}, titles::Vector{String}, n::Int64, m::Int64, include_forces::Bool)
+function initialize_plots(safe_bounds::Matrix{Float64}, times::Vector{Float64}, Z_k::Matrix{Float64}, titles::Vector{String}, n::Int64, m::Int64, include_forces::Bool)
     plt_t0 = length(times)
     n_traces = n + m
 
@@ -409,7 +409,7 @@ function initialize_plots(safe_bounds::Matrix{Float64}, times::Vector{Float64}, 
     end
 
     for i in 1:n_traces
-        trace_actual = PlotlyJS.scatter(x=times[1:plt_t0], y=Z_t[i, 1:plt_t0], mode="lines", name="Actual $(titles[i])", xaxis="x$i", yaxis="y$i", line=attr(color="#009af9"), showlegend=false)
+        trace_actual = PlotlyJS.scatter(x=times[1:plt_t0], y=Z_k[i, 1:plt_t0], mode="lines", name="Actual $(titles[i])", xaxis="x$i", yaxis="y$i", line=attr(color="#009af9"), showlegend=false)
         push!(plts, trace_actual)
     end
 
@@ -424,7 +424,7 @@ function initialize_plots(safe_bounds::Matrix{Float64}, times::Vector{Float64}, 
         push!(plts, trace_upper)
     end
 
-    obj_hist = compute_obj_hist(n, m, plt_t0, Z_t)
+    obj_hist = compute_obj_hist(n, m, plt_t0, Z_k)
     trace_obj = PlotlyJS.scatter(x=times[1:end-1], y=obj_hist, mode="lines", name="Objective", xaxis="x$(n_traces+1)", yaxis="y$(n_traces+1)", line=attr(color="#000000"), showlegend=false)
     push!(plts, trace_obj)
 
@@ -475,7 +475,7 @@ function initialize_plots(safe_bounds::Matrix{Float64}, times::Vector{Float64}, 
 end
 
 """
-    compute_obj_hist(n::Int64, m::Int64, t::Int64, Z_t::Matrix{Float64})
+    compute_obj_hist(n::Int64, m::Int64, t::Int64, Z_k::Matrix{Float64})
 
 Compute the objective history.
 
@@ -483,20 +483,20 @@ Compute the objective history.
 - `n::Int64`: The number of states.
 - `m::Int64`: The number of control inputs.
 - `t::Int64`: The number of time steps.
-- `Z_t::Matrix{Float64}`: The matrix of observed data.
+- `Z_k::Matrix{Float64}`: The matrix of observed data.
 
 # Returns
 - `obj_hist::Vector{Float64}`: The objective history as a vector of type `Vector{Float64}`.
 
 """
-function compute_obj_hist(n::Int64, m::Int64, t::Int64, Z_t::Matrix{Float64})
+function compute_obj_hist(n::Int64, m::Int64, t::Int64, Z_k::Matrix{Float64})
     st = 25
     obj_hist = zeros(t - st)
     residual_norm_hist = []
     for i in st:t-1
-        sigma, residual_norm = compute_sigma(Z_t[:, 1:i], n)
-        obj = tr(sigma^(2) * inv(Z_t[:, 1:i-1] * Z_t[:, 1:i-1]'))
-        # obj = log(det(sigma^(2) * inv(Z_t[:, 1:i-1] * Z_t[:, 1:i-1]')))
+        sigma, residual_norm = compute_sigma(Z_k[:, 1:i], n)
+        obj = tr(sigma^(2) * inv(Z_k[:, 1:i-1] * Z_k[:, 1:i-1]'))
+        # obj = log(det(sigma^(2) * inv(Z_k[:, 1:i-1] * Z_k[:, 1:i-1]')))
         obj_hist[i-st+1] = obj
         push!(residual_norm_hist, residual_norm)
     end
