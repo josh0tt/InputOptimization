@@ -32,10 +32,6 @@ function build_model(safe_bounds::Matrix{Float64}, Z_k::Matrix{Float64}, A_hat::
         set_attribute(model, "INTPNT_CO_TOL_PFEAS", 1e-4)
         set_attribute(model, "INTPNT_CO_TOL_DFEAS", 1e-4)   
         set_attribute(model, "INTPNT_CO_TOL_MU_RED", 1e-4)
-    elseif method == "distance"
-        # penalize by how close Z is to the safe bounds
-        λ = 1.0
-        @objective(model, Min, -tr(W_hat) + λ * sum((Z[valid_bounds, n_t+1:(n_t+t_horizon)] .- lower_bounds[valid_bounds]).^2 + (Z[valid_bounds, n_t+1:(n_t+t_horizon)] .- upper_bounds[valid_bounds]).^2))
     else
         @objective(model, Min, -tr(W_hat))
     end
