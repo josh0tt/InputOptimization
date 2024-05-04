@@ -204,45 +204,71 @@ function sequence_detecterrors(t::MaxLFSR{LEN}, v::Vector{T}) where {LEN, T<:Num
     return _errors
 end
 
+# function markov_sequence(problem::InputOptimizationProblem, p::Float64=0.75)
+#     rng = problem.rng
+#     m = problem.m
+#     n = problem.n
+#     t_horizon = problem.t_horizon
+#     len = t_horizon
+#     max_As = problem.max_As
+#     Z_unscaled = StatsBase.reconstruct(problem.scaler, problem.Z)
+#     U_desired = Z_unscaled[n+1:end, end]
+
+#     # for each of the m control inputs generate a sequence that alternates between 0 and 1. With probability p=0.75 that we remain at the previous value
+#     sequence = zeros(m, len)
+#     sequence[:, 1] = rand(rng, [0,1], m)
+#     for i in 1:m
+#         for j in 2:len
+#             if rand(rng) < p
+#                 sequence[i, j] = sequence[i, j-1]
+#             else
+#                 sequence[i, j] = sequence[i, j-1] == 0 ? 1 : 0
+#             end
+#         end
+#     end
+
+#     U = sequence 
+    
+#     # U is size (m, t_horizon)
+#     # we need to scale each column of U so that the 1s correspond to max_As + U_desired and 0s correspond to U_desired - max_As
+#     U = U .* 2 .* max_As .+ U_desired .- max_As
+
+#     # Smooth U so that the changes between each step is less than delta_maxs
+#     for i in 1:m
+#         for j in 2:t_horizon
+#             if abs(U[i, j] - U[i, j-1]) > problem.delta_maxs[i]
+#                 U[i, j] = U[i, j-1] + sign(U[i, j] - U[i, j-1]) * problem.delta_maxs[i]
+#             end
+#         end
+#     end
+
+#     return U        
+# end
 function markov_sequence(problem::InputOptimizationProblem, p::Float64=0.75)
+    # this should return a U corresponding to scaled control inputs
     rng = problem.rng
     m = problem.m
     n = problem.n
     t_horizon = problem.t_horizon
     len = t_horizon
-    max_As = problem.max_As
-    Z_unscaled = StatsBase.reconstruct(problem.scaler, problem.Z)
-    U_desired = Z_unscaled[n+1:end, end]
+    # Z_unscaled = StatsBase.reconstruct(problem.scaler, problem.Z)
+    # U_desired = Z_unscaled[n+1:end, end]
+    U_desired = problem.Z[n+1:end, end]
 
-    # for each of the m control inputs generate a sequence that alternates between 0 and 1. With probability p=0.75 that we remain at the previous value
-    sequence = zeros(m, len)
-    sequence[:, 1] = rand(rng, [0,1], m)
+    # create a sequence of m control inputs (mxlen matrix) starting from U_desired and either increasing/decreasing by delta_max or staying the same with p=0.75 each step 
+    U = zeros(m, len)
+    U[:, 1] = U_desired
     for i in 1:m
         for j in 2:len
-            if rand(rng) < p
-                sequence[i, j] = sequence[i, j-1]
-            else
-                sequence[i, j] = sequence[i, j-1] == 0 ? 1 : 0
+            U[i, j] = U[i, j-1] + (rand(rng) < p ? 0 : (rand(rng) < 0.5 ? -1 : 1) * problem.delta_maxs[i])
+            if U[i, j] < problem.safe_bounds[problem.n+i, 1]
+                U[i, j] = problem.safe_bounds[problem.n+i, 1]
+            elseif U[i, j] > problem.safe_bounds[problem.n+i, 2]
+                U[i, j] = problem.safe_bounds[problem.n+i, 2]
             end
         end
     end
-
-    U = sequence 
-    
-    # U is size (m, t_horizon)
-    # we need to scale each column of U so that the 1s correspond to max_As + U_desired and 0s correspond to U_desired - max_As
-    U = U .* 2 .* max_As .+ U_desired .- max_As
-
-    # Smooth U so that the changes between each step is less than delta_maxs
-    for i in 1:m
-        for j in 2:t_horizon
-            if abs(U[i, j] - U[i, j-1]) > problem.delta_maxs[i]
-                U[i, j] = U[i, j-1] + sign(U[i, j] - U[i, j-1]) * problem.delta_maxs[i]
-            end
-        end
-    end
-
-    return U        
+    return U
 end
 
 function run_random(problem::InputOptimizationProblem)
@@ -265,8 +291,8 @@ function run_random(problem::InputOptimizationProblem)
     U = markov_sequence(problem)
     
     control_traj = U
-    control_traj = StatsBase.transform(problem.scaler, vcat(zeros(n, t_horizon), control_traj))
-    control_traj = control_traj[n+1:end, :]
+    # control_traj = StatsBase.transform(problem.scaler, vcat(zeros(n, t_horizon), control_traj))
+    # control_traj = control_traj[n+1:end, :]
     Z_planned = zeros(n+m, t_horizon+n_t)
     Z_planned[:, 1:n_t] = Z
     Z_planned[n+1:end, n_t+1:end] = control_traj

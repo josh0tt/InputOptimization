@@ -35,7 +35,7 @@ Fit process noise using maximum likelihood estimation.
 - `𝒩`: The fitted process noise distribution.
 
 """
-function fit_process_noise(Z::Matrix{Float64}, A_hat::Matrix{Float64}, B_hat::Matrix{Float64}, n::Int, m::Int)
+function fit_process_noise(Z::Matrix{Float64}, A_hat::Matrix{Float64}, B_hat::Matrix{Float64}, n::Int, m::Int)::FullNormal
     x = Z[1:n, 1:end-1]
     u = Z[n+1:end, 1:end-1]
     xp = Z[1:n, 2:end]
@@ -64,7 +64,7 @@ The function returns the `InputOptimizationProblem` object.
 - `problem`: An `InputOptimizationProblem` object representing the input optimization problem.
 
 """
-function problem_setup()
+function problem_setup()::InputOptimizationProblem
     rng = MersenneTwister(1234567)
 
     # 1. run F16 waypoint simulation to collect data set 
@@ -84,7 +84,7 @@ function problem_setup()
         Z_unscaled[1, end]-150 Z_unscaled[1, end]+150; # vt ft/s
         Z_unscaled[2, end]-10 Z_unscaled[2, end]+20; # alpha
         Z_unscaled[3, end]-2 Z_unscaled[3, end]+2; # beta
-        Z_unscaled[4, end]-45 Z_unscaled[4, end]+45; # phi (roll)
+        Z_unscaled[4, end]-60 Z_unscaled[4, end]+60; # phi (roll)
         Z_unscaled[5, end]-60 Z_unscaled[5, end]+60; # theta (pitch)
         -180 180; # psi
         Z_unscaled[7, end]-30 Z_unscaled[7, end]+30; # P
@@ -97,7 +97,7 @@ function problem_setup()
         # -0.5 3; # Nz
         Z_unscaled[14, end]-0.1 Z_unscaled[14, end]+0.4; # throt
         Z_unscaled[15, end]-1 Z_unscaled[15, end]+1; # ele
-        Z_unscaled[16, end]-1 Z_unscaled[16, end]+1; # ail
+        Z_unscaled[16, end]-0.5 Z_unscaled[16, end]+0.5; # ail
         Z_unscaled[17, end]-1 Z_unscaled[17, end]+1 # rud
     ]
     

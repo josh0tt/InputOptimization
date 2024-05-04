@@ -5,7 +5,12 @@ using Gurobi
 using Interpolations
 using Distributions
 
-function build_model(safe_bounds::Matrix{Float64}, Z_k::Matrix{Float64}, A_hat::Matrix{Float64}, B_hat::Matrix{Float64}, n::Int64, m::Int64, n_t::Int64, t_horizon::Int64, Z_cur::Matrix{Float64}, Σ::Distributions.PDMats.PDMat{Float64, Matrix{Float64}}, Q::Distributions.PDMats.PDMat{Float64, Matrix{Float64}}, scaler::UnitRangeTransform{Float64,Vector{Float64}}, delta_maxs::Vector{Float64}, method::String, sim::String)
+function build_model(safe_bounds::Matrix{Float64}, Z_k::Matrix{Float64}, A_hat::Matrix{Float64}, B_hat::Matrix{Float64}, 
+                     n::Int64, m::Int64, n_t::Int64, t_horizon::Int64, Z_cur::Matrix{Float64}, 
+                     Σ::Distributions.PDMats.PDMat{Float64, Matrix{Float64}}, Q::Distributions.PDMats.PDMat{Float64, Matrix{Float64}}, 
+                     scaler::UnitRangeTransform{Float64,Vector{Float64}}, delta_maxs::Vector{Float64}, 
+                     method::String, sim::String)
+    
     if method == "SDP"
         model = Model(Mosek.Optimizer)
         @variable(model, Y[1:n+m, 1:n+m], PSD)
@@ -18,7 +23,8 @@ function build_model(safe_bounds::Matrix{Float64}, Z_k::Matrix{Float64}, A_hat::
     Z = [Z_k Z_ctrl]
     Z_diff = Z - Z_cur
     Z_diff_transpose = Z_diff'
-    W_hat = Z_cur * Z_cur' + Z_cur * Z_diff_transpose + Z_diff * Z_cur'
+    Z_cur_Z_diff_transpose = Z_cur * Z_diff_transpose
+    W_hat = Z_cur * Z_cur' + Z_cur_Z_diff_transpose + Z_cur_Z_diff_transpose'
 
     upper_bounds = safe_bounds[:, 2]
     lower_bounds = safe_bounds[:, 1]
@@ -47,17 +53,14 @@ function build_model(safe_bounds::Matrix{Float64}, Z_k::Matrix{Float64}, A_hat::
         @constraint(model, Z[n+1:end, i] - Z[n+1:end, i+1] .>= -delta_maxs)
     end
 
-    # Σs = [A_hat * Σ * A_hat' + Q for _ in 1:t_horizon]
-    # σs = hcat([sqrt.(diag(Σs[i])) for i in 1:t_horizon]...)
-    # β = 1.96 # z-score for 95% confidence interval
-    Σs = []
-    push!(Σs, Σ)
-    for i in 1:t_horizon-1
-        Σ = A_hat * Σ * A_hat' + Q
-        push!(Σs, Σ)
+    # Compute Σs and σs
+    Σs = Vector{Matrix{Float64}}(undef, t_horizon)
+    Σs[1] = Σ
+    for i in 2:t_horizon
+        Σs[i] = A_hat * Σs[i-1] * A_hat' + Q
     end
     σs = hcat([sqrt.(diag(Σs[i])) for i in 1:t_horizon]...)
-    β = 2.576#1.96 # z-score for 95% confidence interval
+    β = 2.576  # z-score for 99% confidence interval
 
     # @constraint(model, lower_bounds[valid_bounds] .<= Z[valid_bounds, n_t+1:(n_t+t_horizon)])
     # @constraint(model, Z[valid_bounds, n_t+1:(n_t+t_horizon)] .<= upper_bounds[valid_bounds])
@@ -66,10 +69,7 @@ function build_model(safe_bounds::Matrix{Float64}, Z_k::Matrix{Float64}, A_hat::
 
 
     # spend equal amount of time on either side of control input
-    @constraint(model, sum(Z[n+1:end, n_t+1:end] .- Z[n+1:end, n_t]) .== zeros(m))
-    # for i in n+1:n+m
-    #     @constraint(model, sum(Z[i, n_t+1:(n_t+t_horizon)]) == sum(Z[i, n_t+1:(n_t+t_horizon)]))
-    # end
+    # @constraint(model, sum(Z[n+1:end, n_t+1:end] .- Z[n+1:end, n_t]) .== zeros(m))
     
     # wₖ, _ = compute_sigma(Z_k, n)
     # Σₖ = wₖ^2 * inv(Z_k * Z_k')
@@ -93,8 +93,7 @@ function build_model(safe_bounds::Matrix{Float64}, Z_k::Matrix{Float64}, A_hat::
 
     if sim == "xplane"
         # add constraint that we want to end up with zero roll, pitch, and yaw
-        desired_end_state = zeros(n + m, 1)
-        desired_end_state = StatsBase.transform(scaler, desired_end_state)
+        desired_end_state = StatsBase.transform(scaler, zeros(n + m, 1))
         println("Desired end state: ", desired_end_state)
         @constraint(model, Z[1:3, n_t+t_horizon] .== desired_end_state[1:3])
     end
@@ -102,9 +101,11 @@ function build_model(safe_bounds::Matrix{Float64}, Z_k::Matrix{Float64}, A_hat::
     return model
 end
 
-function plan_control_inputs(problem::InputOptimizationProblem, method::String="approx", sim::String="aerobench")
-    plan_time = time()
+function plan_control_inputs(problem::InputOptimizationProblem, 
+                             method::String="approx", 
+                             sim::String="aerobench")
 
+    plan_time = time()
     safe_bounds = problem.safe_bounds
     times = problem.times
     Z_k = problem.Z
@@ -117,7 +118,6 @@ function plan_control_inputs(problem::InputOptimizationProblem, method::String="
     t_horizon = problem.t_horizon
     delta_maxs = problem.delta_maxs
     
-    Sigma_0_inv = diagm(0 => ones(n + m))
     if method == "SDP"
         # using random initial Z_cur leads to infeasible Mosek
         # Z_cur = [Z_k Z_k[:, end] .+ zeros(n+m, t_horizon)]
@@ -169,7 +169,9 @@ function plan_control_inputs(problem::InputOptimizationProblem, method::String="
         # Update W_hat for model objective 
         Z_diff = Z - Z_cur
         Z_diff_transpose = Z_diff'
-        W_hat = Z_cur * Z_cur' + Z_cur * Z_diff_transpose + Z_diff * Z_cur' + Sigma_0_inv
+        Z_cur_Z_diff_transpose = Z_cur * Z_diff_transpose
+        W_hat = Z_cur * Z_cur' + Z_cur_Z_diff_transpose + Z_cur_Z_diff_transpose'
+        # W_hat = Z_cur * Z_cur' + Z_cur * Z_diff_transpose + Z_diff * Z_cur'
         set_objective_function(model, -tr(W_hat))
 
 

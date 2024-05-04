@@ -30,7 +30,7 @@ struct RandomSequence <: SolutionMethod end
     safe_bounds::Matrix{Float64}                        # (n+m) x 2 safety bounds scaled
     safe_bounds_unscaled::Matrix{Float64}               # (n+m) x 2 safety bounds unscaled
     delta_maxs::Vector{Float64}                         # maximum change in control inputs between time steps
-    max_As::Vector{Float64}                             # maximum amplitude of control inputs
+    max_As::Vector{Float64}                             # maximum amplitude of control inputs unscaled
     f_min::Float64                                      # minimum frequency for multisines
     f_max::Float64                                      # maximum frequency for multisines
     row_names::Vector{String}                           # Z row names
@@ -48,25 +48,25 @@ include("run_experiments.jl")
 include("run_xplane.jl")
 
 
-function solve(problem::InputOptimizationProblem, method::ConvexConcave)
+function solve(problem::InputOptimizationProblem, method::ConvexConcave)::Matrix{Float64}
     println("Solving with Convex Concave")
     Z_planned = plan_control_inputs(problem)
     return Z_planned
 end
 
-function solve(problem::InputOptimizationProblem, method::ConvexConcaveSDP)
+function solve(problem::InputOptimizationProblem, method::ConvexConcaveSDP)::Matrix{Float64}
     println("Solving with Convex Concave SDP")
     Z_planned = plan_control_inputs(problem, "SDP")
     return Z_planned
 end
 
-function solve(problem::InputOptimizationProblem, method::OrthogonalMultisine)
+function solve(problem::InputOptimizationProblem, method::OrthogonalMultisine)::Matrix{Float64}
     println("Solving with Orthogonal Multisine")
     Z_planned = run_orthogonal_multisines(problem)
     return Z_planned
 end
 
-function solve(problem::InputOptimizationProblem, method::RandomSequence)
+function solve(problem::InputOptimizationProblem, method::RandomSequence)::Matrix{Float64}
     println("Solving with Random Sequence")
     Z_planned = run_random(problem)
     return Z_planned

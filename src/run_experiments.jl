@@ -51,7 +51,6 @@ end
 
 function run_experiments()
     problem = problem_setup()
-    problem.t_horizon = round(Int64, 5 / problem.Δt)
 
     ccp_data = SimData(problem, Vector{Float64}(), Vector{Float64}(), Vector{Float64}(), Vector{Matrix{Float64}}())
     ccp_sdp_data = SimData(problem, Vector{Float64}(), Vector{Float64}(), Vector{Float64}(), Vector{Matrix{Float64}}())
@@ -61,14 +60,14 @@ function run_experiments()
     # run each method once first to compile
     solve(problem, ConvexConcave());
     solve(problem, ConvexConcaveSDP());
-    solve(problem, OrthogonalMultisine());
+    # solve(problem, OrthogonalMultisine());
     solve(problem, RandomSequence());
 
     num_sims = 100
 
     @showprogress dt=0.5 desc="Running sims..." for i in 1:num_sims
-        for method in [ConvexConcave(), ConvexConcaveSDP(), OrthogonalMultisine(), RandomSequence()]
-        # for method in [ConvexConcave(), ConvexConcaveSDP()]
+        # for method in [ConvexConcave(), ConvexConcaveSDP(), OrthogonalMultisine(), RandomSequence()]
+        for method in [ConvexConcave(), ConvexConcaveSDP(), RandomSequence()]
             Z_planned, runtime, times_actual, Z_actual = nothing, nothing, nothing, nothing
 
             attempts = 0
@@ -114,7 +113,7 @@ function run_experiments()
 
     JLD2.save("ccp_sdp_data.jld2", "ccp_sdp_data", ccp_sdp_data)
     JLD2.save("ccp_data.jld2", "ccp_data", ccp_data)
-    JLD2.save("orthog_data.jld2", "orthog_data", orthog_data)
+    # JLD2.save("orthog_data.jld2", "orthog_data", orthog_data)
     JLD2.save("random_data.jld2", "random_data", random_data)
 end
 
