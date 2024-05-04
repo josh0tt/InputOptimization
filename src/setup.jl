@@ -65,7 +65,7 @@ The function returns the `InputOptimizationProblem` object.
 
 """
 function problem_setup()
-    rng = MersenneTwister(12345)
+    rng = MersenneTwister(1234567)
 
     # 1. run F16 waypoint simulation to collect data set 
     # we don't need it this smooth, we should just limit how far from the starting init we can go
@@ -81,20 +81,20 @@ function problem_setup()
     Z = StatsBase.transform(scaler, Z_unscaled)
 
     safe_bounds_unscaled = [
-        Z_unscaled[1, end]-100 Z_unscaled[1, end]+100; # vt ft/s
+        Z_unscaled[1, end]-150 Z_unscaled[1, end]+150; # vt ft/s
         Z_unscaled[2, end]-10 Z_unscaled[2, end]+20; # alpha
         Z_unscaled[3, end]-2 Z_unscaled[3, end]+2; # beta
-        Z_unscaled[4, end]-20 Z_unscaled[4, end]+20; # phi (roll)
-        Z_unscaled[5, end]-20 Z_unscaled[5, end]+20; # theta (pitch)
+        Z_unscaled[4, end]-45 Z_unscaled[4, end]+45; # phi (roll)
+        Z_unscaled[5, end]-60 Z_unscaled[5, end]+60; # theta (pitch)
         -180 180; # psi
         Z_unscaled[7, end]-30 Z_unscaled[7, end]+30; # P
         Z_unscaled[8, end]-30 Z_unscaled[8, end]+30; # Q
         Z_unscaled[9, end]-30 Z_unscaled[9, end]+30; # R
         -Inf Inf; # pn ft
         -Inf Inf; # pe ft
-        Z_unscaled[12, end]-400 Z_unscaled[12, end]+400; # h ft
+        Z_unscaled[12, end]-2000 Z_unscaled[12, end]+2000; # h ft
         0 100; # pow
-        -0.5 3; # Nz
+        # -0.5 3; # Nz
         Z_unscaled[14, end]-0.1 Z_unscaled[14, end]+0.4; # throt
         Z_unscaled[15, end]-1 Z_unscaled[15, end]+1; # ele
         Z_unscaled[16, end]-1 Z_unscaled[16, end]+1; # ail

@@ -57,7 +57,7 @@ function build_model(safe_bounds::Matrix{Float64}, Z_k::Matrix{Float64}, A_hat::
         push!(Σs, Σ)
     end
     σs = hcat([sqrt.(diag(Σs[i])) for i in 1:t_horizon]...)
-    β = 1.96 # z-score for 95% confidence interval
+    β = 2.576#1.96 # z-score for 95% confidence interval
 
     # @constraint(model, lower_bounds[valid_bounds] .<= Z[valid_bounds, n_t+1:(n_t+t_horizon)])
     # @constraint(model, Z[valid_bounds, n_t+1:(n_t+t_horizon)] .<= upper_bounds[valid_bounds])
@@ -66,7 +66,7 @@ function build_model(safe_bounds::Matrix{Float64}, Z_k::Matrix{Float64}, A_hat::
 
 
     # spend equal amount of time on either side of control input
-    # @constraint(model, sum(Z[n+1:end, n_t+1:end] .- Z[n+1:end, n_t]) .== zeros(m))
+    @constraint(model, sum(Z[n+1:end, n_t+1:end] .- Z[n+1:end, n_t]) .== zeros(m))
     # for i in n+1:n+m
     #     @constraint(model, sum(Z[i, n_t+1:(n_t+t_horizon)]) == sum(Z[i, n_t+1:(n_t+t_horizon)]))
     # end

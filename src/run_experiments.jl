@@ -51,6 +51,7 @@ end
 
 function run_experiments()
     problem = problem_setup()
+    problem.t_horizon = round(Int64, 5 / problem.Δt)
 
     ccp_data = SimData(problem, Vector{Float64}(), Vector{Float64}(), Vector{Float64}(), Vector{Matrix{Float64}}())
     ccp_sdp_data = SimData(problem, Vector{Float64}(), Vector{Float64}(), Vector{Float64}(), Vector{Matrix{Float64}}())
@@ -67,7 +68,7 @@ function run_experiments()
 
     @showprogress dt=0.5 desc="Running sims..." for i in 1:num_sims
         for method in [ConvexConcave(), ConvexConcaveSDP(), OrthogonalMultisine(), RandomSequence()]
-        # for method in [ConvexConcaveSDP()]
+        # for method in [ConvexConcave(), ConvexConcaveSDP()]
             Z_planned, runtime, times_actual, Z_actual = nothing, nothing, nothing, nothing
 
             attempts = 0

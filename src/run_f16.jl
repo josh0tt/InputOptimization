@@ -170,7 +170,7 @@ function run_f16_waypoint_sim(step=1/15, gif=false)
         states[:, i] = rad2deg(states[:, i])
     end
     # include Nz in states 
-    states = hcat(states, Nz) 
+    # states = hcat(states, Nz) 
 
     # only keep the first 4 columns of controls
     controls = controls[:, 1:4]
@@ -226,7 +226,7 @@ function run_f16_sim(problem::InputOptimizationProblem, Z_planned::Matrix{Float6
         states[:, i] = rad2deg(states[:, i])
     end
     # include Nz in states
-    states = hcat(states, Nz)
+    # states = hcat(states, Nz)
 
     # only keep the first 4 columns of controls
     controls = controls[:, 1:4]
