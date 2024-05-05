@@ -51,7 +51,6 @@ end
 
 function run_experiments()
     problem = problem_setup()
-    problem.t_horizon = round(Int64, 5 / problem.Δt)
 
     ccp_data = SimData(problem, Vector{Float64}(), Vector{Float64}(), Vector{Float64}(), Vector{Matrix{Float64}}())
     ccp_sdp_data = SimData(problem, Vector{Float64}(), Vector{Float64}(), Vector{Float64}(), Vector{Matrix{Float64}}())
@@ -132,4 +131,3 @@ function make_gifs(t_horizon_mult = 2)
         times_actual, Z_actual = run_f16_sim(problem, Z_planned, method_names_dict[method], true)
     end
 end
-
