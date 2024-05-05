@@ -45,6 +45,34 @@ function fit_process_noise(Z::Matrix{Float64}, A_hat::Matrix{Float64}, B_hat::Ma
     return 𝒩
 end
 
+
+
+function doublet_matrix(m::Int, n_t::Int, amplitude::Float64, pulse_length::Int)
+    matrix = zeros(Float64, m, n_t)
+    doublet_length = 2 * pulse_length
+    
+    for i in 1:m
+        start_index = (i - 1) * (n_t - doublet_length) ÷ (m - 1) + 1
+
+        if start_index <= n_t - doublet_length + 1
+            matrix[i, start_index:start_index + pulse_length - 1] .= amplitude
+            matrix[i, start_index + pulse_length:start_index + 2 * pulse_length - 1] .= -amplitude
+        end
+    end
+
+    #.+ 0.5
+
+    # apply smoothing 
+    for i in 1:m
+        for j in 2:n_t
+            matrix[i, j] += 0.1 * matrix[i, j] + 0.9 * matrix[i, j - 1]
+        end
+    end
+
+    matrix[1,:] = (matrix[1,:] .+ amplitude) / 2.0 .+ 0.5
+    return matrix
+end
+
 """
     problem_setup()
 
@@ -69,11 +97,21 @@ function problem_setup()::InputOptimizationProblem
 
     # 1. run F16 waypoint simulation to collect data set 
     # we don't need it this smooth, we should just limit how far from the starting init we can go
-    times, states, controls = run_f16_waypoint_sim()
-    n, m = size(states, 2), size(controls, 2)
-    n_t = length(times)
-    Δt = times[2] - times[1]
+    # times, states, controls = run_f16_waypoint_sim()
+    # n, m = size(states, 2), size(controls, 2)
+    # n_t = length(times)
+    # Δt = times[2] - times[1]
+    # t_horizon = round(Int64, 10 / Δt)
+    m = 4
+    n = 13
+    Δt = 1/20
     t_horizon = round(Int64, 10 / Δt)
+    U = doublet_matrix(m, t_horizon, 0.1, 10)
+    U[[1], :] .= 0.0
+    times, states, controls = run_f16_sim_random_seq(t_horizon, Δt, Matrix(U'), false)
+    # m =3
+    n_t = length(times)
+
 
     # 2. scale the data
     Z_unscaled = Matrix(hcat(states, controls)') # Z is shaped as (n+m,t) where n is the number of states and m is the number of controls
@@ -84,7 +122,7 @@ function problem_setup()::InputOptimizationProblem
         Z_unscaled[1, end]-150 Z_unscaled[1, end]+150; # vt ft/s
         Z_unscaled[2, end]-10 Z_unscaled[2, end]+20; # alpha
         Z_unscaled[3, end]-2 Z_unscaled[3, end]+2; # beta
-        Z_unscaled[4, end]-60 Z_unscaled[4, end]+60; # phi (roll)
+        Z_unscaled[4, end]-45 Z_unscaled[4, end]+45; # phi (roll)
         Z_unscaled[5, end]-60 Z_unscaled[5, end]+60; # theta (pitch)
         -180 180; # psi
         Z_unscaled[7, end]-30 Z_unscaled[7, end]+30; # P
@@ -99,6 +137,10 @@ function problem_setup()::InputOptimizationProblem
         Z_unscaled[15, end]-1 Z_unscaled[15, end]+1; # ele
         Z_unscaled[16, end]-0.5 Z_unscaled[16, end]+0.5; # ail
         Z_unscaled[17, end]-1 Z_unscaled[17, end]+1 # rud
+        # 0 1; # throt
+        # Z_unscaled[15, end]-1 Z_unscaled[15, end]+1; # ele
+        # Z_unscaled[16, end]-0.5 Z_unscaled[16, end]+0.5; # ail
+        # Z_unscaled[17, end]-1 Z_unscaled[17, end]+1 # rud
     ]
     
     # equating constraints between ccp and orthogonal multisines
@@ -114,6 +156,7 @@ function problem_setup()::InputOptimizationProblem
     sines_scaled = StatsBase.transform(scaler, vcat(zeros(n, n_t), sines))
     sines_scaled = sines_scaled[n+1:end, :]
     delta_maxs = [mean(abs.(sines_scaled[i, 2:end] - sines_scaled[i, 1:end-1])) for i in 1:m] #[maximum(abs.(sines_scaled[i, 2:end] - sines_scaled[i, 1:end-1])) for i in 1:m]
+    # delta_maxs[1] = 0.0
     @show delta_maxs
 
     # scale the bounds as well
