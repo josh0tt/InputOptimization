@@ -244,6 +244,7 @@ end
 
 #     return U        
 # end
+
 function markov_sequence(problem::InputOptimizationProblem, p::Float64=0.75)
     # this should return a U corresponding to scaled control inputs
     rng = problem.rng
@@ -261,10 +262,15 @@ function markov_sequence(problem::InputOptimizationProblem, p::Float64=0.75)
     for i in 1:m
         for j in 2:len
             U[i, j] = U[i, j-1] + (rand(rng) < p ? 0 : (rand(rng) < 0.5 ? -1 : 1) * problem.delta_maxs[i])
-            if U[i, j] < problem.safe_bounds[problem.n+i, 1]
-                U[i, j] = problem.safe_bounds[problem.n+i, 1]
-            elseif U[i, j] > problem.safe_bounds[problem.n+i, 2]
-                U[i, j] = problem.safe_bounds[problem.n+i, 2]
+            # if U[i, j] < problem.safe_bounds[problem.n+i, 1]
+            #     U[i, j] = problem.safe_bounds[problem.n+i, 1]
+            # elseif U[i, j] > problem.safe_bounds[problem.n+i, 2]
+            #     U[i, j] = problem.safe_bounds[problem.n+i, 2]
+            # end
+            if U[i, j] < U_desired[i] - problem.delta_maxs[i]
+                U[i, j] = U_desired[i] - problem.delta_maxs[i]
+            elseif U[i, j] > U_desired[i] + problem.delta_maxs[i]
+                U[i, j] = U_desired[i] + problem.delta_maxs[i]
             end
         end
     end

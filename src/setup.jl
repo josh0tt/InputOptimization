@@ -73,7 +73,7 @@ function problem_setup()::InputOptimizationProblem
     n, m = size(states, 2), size(controls, 2)
     n_t = length(times)
     Δt = times[2] - times[1]
-    t_horizon = round(Int64, 10 / Δt)
+    t_horizon = round(Int64, 7 / Δt)
 
     # 2. scale the data
     Z_unscaled = Matrix(hcat(states, controls)') # Z is shaped as (n+m,t) where n is the number of states and m is the number of controls
@@ -83,9 +83,9 @@ function problem_setup()::InputOptimizationProblem
     safe_bounds_unscaled = [
         Z_unscaled[1, end]-150 Z_unscaled[1, end]+150; # vt ft/s
         Z_unscaled[2, end]-10 Z_unscaled[2, end]+20; # alpha
-        Z_unscaled[3, end]-2 Z_unscaled[3, end]+2; # beta
-        Z_unscaled[4, end]-45 Z_unscaled[4, end]+45; # phi (roll)
-        Z_unscaled[5, end]-60 Z_unscaled[5, end]+60; # theta (pitch)
+        Z_unscaled[3, end]-10 Z_unscaled[3, end]+10; # beta
+        Z_unscaled[4, end]-30 Z_unscaled[4, end]+30; # phi (roll)
+        Z_unscaled[5, end]-30 Z_unscaled[5, end]+30; # theta (pitch)
         -180 180; # psi
         Z_unscaled[7, end]-30 Z_unscaled[7, end]+30; # P
         Z_unscaled[8, end]-30 Z_unscaled[8, end]+30; # Q
@@ -95,10 +95,10 @@ function problem_setup()::InputOptimizationProblem
         Z_unscaled[12, end]-2000 Z_unscaled[12, end]+2000; # h ft
         0 100; # pow
         # -0.5 3; # Nz
-        Z_unscaled[14, end]-0.1 Z_unscaled[14, end]+0.4; # throt
-        Z_unscaled[15, end]-1 Z_unscaled[15, end]+1; # ele
+        Z_unscaled[14, end]-0.1 Z_unscaled[14, end]+0.1; # throt
+        Z_unscaled[15, end]-0.5 Z_unscaled[15, end]+0.5; # ele
         Z_unscaled[16, end]-0.5 Z_unscaled[16, end]+0.5; # ail
-        Z_unscaled[17, end]-1 Z_unscaled[17, end]+1 # rud
+        Z_unscaled[17, end]-0.5 Z_unscaled[17, end]+0.5 # rud
     ]
     
     # equating constraints between ccp and orthogonal multisines

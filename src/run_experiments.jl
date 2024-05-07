@@ -67,7 +67,7 @@ function run_experiments()
 
     @showprogress dt=0.5 desc="Running sims..." for i in 1:num_sims
         for method in [ConvexConcave(), ConvexConcaveSDP(), OrthogonalMultisine(), RandomSequence()]
-        # for method in [ConvexConcave(), ConvexConcaveSDP(), RandomSequence()]
+        # for method in [ConvexConcave(), ConvexConcaveSDP()]
             Z_planned, runtime, times_actual, Z_actual = nothing, nothing, nothing, nothing
 
             attempts = 0

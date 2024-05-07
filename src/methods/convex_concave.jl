@@ -49,7 +49,7 @@ function build_model(safe_bounds::Matrix{Float64}, Z_k::Matrix{Float64}, A_hat::
     # Dynamics and control constraints
     for i in n_t:(n_t+t_horizon-1)
         @constraint(model, Z[1:n, i+1] .== A_hat * Z[1:n, i] + B_hat * Z[n+1:end, i]) # Dynamics
-        @constraint(model, Z[n+1:end, i] - Z[n+1:end, i+1] .<= delta_maxs) # Control variation
+        @constraint(model, Z[n+1:end, i+1] - Z[n+1:end, i] .<= delta_maxs) # Control variation
         @constraint(model, Z[n+1:end, i] - Z[n+1:end, i+1] .>= -delta_maxs)
     end
 
@@ -60,7 +60,7 @@ function build_model(safe_bounds::Matrix{Float64}, Z_k::Matrix{Float64}, A_hat::
         Σs[i] = A_hat * Σs[i-1] * A_hat' + Q
     end
     σs = hcat([sqrt.(diag(Σs[i])) for i in 1:t_horizon]...)
-    β = 2.576  # z-score for 99% confidence interval
+    β = 1.96#2.576  # z-score for 99% confidence interval
 
     # @constraint(model, lower_bounds[valid_bounds] .<= Z[valid_bounds, n_t+1:(n_t+t_horizon)])
     # @constraint(model, Z[valid_bounds, n_t+1:(n_t+t_horizon)] .<= upper_bounds[valid_bounds])

@@ -36,7 +36,7 @@ function optimize_signal(x0::Vector{Float64}, lb::Vector{Float64}, ub::Vector{Fl
     opt.upper_bounds = ub
     opt.min_objective = (x, grad) -> objectiveFunction(x, grad, data)
     opt.xtol_rel = 1e-6
-    # opt.maxeval = 100000  # Increase if necessary
+    opt.maxeval = 100000  # Increase if necessary
 
     (minf, x_opt, ret) = optimize(opt, x0)
     numevals = opt.numevals # the number of function evaluations
