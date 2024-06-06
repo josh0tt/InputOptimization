@@ -1,17 +1,18 @@
 # Input Optimization
-<p align="center">
-  <img alt="Variance" src="https://github.com/josh0tt/InputOptimization/blob/master/img/main.gif" width="100%">
-</p>
-
-# Instructions
-We have demonstrated our method in three different simulation environments: 
+Demonstrations of our method in three different simulation environments: 
 1) [WaterLily.jl](https://github.com/weymouth/WaterLily.jl)
 2) [Aerobench](https://github.com/stanleybak/AeroBenchVVPython)
 3) [X-Plane 11](https://www.x-plane.com/product/desktop/)
 
+<p align="center">
+  <img alt="Variance" src="https://github.com/josh0tt/InputOptimization/blob/master/img/main.gif" width="100%">
+</p>
+
 We also benchmark our method against the orthogonal multisine method proposed by Morelli:
 > Morelli, Eugene A. "Optimal input design for aircraft stability and control flight testing." Journal of Optimization Theory and Applications 191.2 (2021): 415-439.
 
+
+# Instructions
 Navigate to `path/to/InputOptimization`
 ```julia 
 ] activate .
