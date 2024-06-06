@@ -95,8 +95,12 @@ function run_orthogonal_multisines(problem::InputOptimizationProblem)
     A_hat = problem.A_hat
     B_hat = problem.B_hat
     max_As = problem.max_As
-    Z_unscaled = StatsBase.reconstruct(problem.scaler, Z)
-    U_desired = Z_unscaled[n+1:end, end] # last control input (current), where we want to start at 
+    if problem.row_names[1] != "cylinder"
+        Z_unscaled = StatsBase.reconstruct(problem.scaler, Z)
+        U_desired = Z_unscaled[n+1:end, end] # last control input (current), where we want to start at 
+    else
+        U_desired = Z[n+1:end, end] # last control input (current), where we want to start at
+    end
 
     M = 14 # Number of sinusoidal components
 
@@ -116,13 +120,19 @@ function run_orthogonal_multisines(problem::InputOptimizationProblem)
     ωs = 2*π*ks / T
 
     # Initialize power fraction matrix P with zeros for 3 controls and M frequencies
-    P = zeros(4, M)
+    if problem.row_names[1] != "cylinder"
+        P = zeros(4, M)
 
-    # Assign power fractions based on the bar chart for each control from Morelli 2021
-    P[1, :] = [0.06, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.07, 0.06, 0.05, 0.04] 
-    P[2, :] = [0.06, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.07, 0.06, 0.05, 0.04] 
-    P[3, :] = [0.07, 0.07, 0.07, 0.07, 0.07, 0.07, 0.07, 0.07, 0.07, 0.07, 0.07, 0.07, 0.07, 0.07]
-    P[4, :] = [0.06, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.07, 0.06, 0.05, 0.04] 
+        # Assign power fractions based on the bar chart for each control from Morelli 2021
+        P[1, :] = [0.06, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.07, 0.06, 0.05, 0.04] 
+        P[2, :] = [0.06, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.07, 0.06, 0.05, 0.04] 
+        P[3, :] = [0.07, 0.07, 0.07, 0.07, 0.07, 0.07, 0.07, 0.07, 0.07, 0.07, 0.07, 0.07, 0.07, 0.07]
+        P[4, :] = [0.06, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.07, 0.06, 0.05, 0.04]
+    else
+        P = zeros(n_i, M)
+        # Assign power fractions based on the bar chart for each control from Morelli 2021
+        P[1, :] = [0.06, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.07, 0.06, 0.05, 0.04] 
+    end 
     # P[1, :] = [0.1, 0.3, 0.3, 0.2, 0.1] 
     # P[2, :] = [0.1, 0.3, 0.3, 0.2, 0.1]
     # P[3, :] = [0.1, 0.3, 0.3, 0.2, 0.1]
@@ -154,25 +164,19 @@ function run_orthogonal_multisines(problem::InputOptimizationProblem)
     println(ret)
 
     control_traj = U_adjusted'
-    control_traj = StatsBase.transform(problem.scaler, vcat(zeros(n, t_horizon), control_traj))
-    control_traj = control_traj[n+1:end, :]
+    if problem.row_names[1] != "cylinder"
+        control_traj = StatsBase.transform(problem.scaler, vcat(zeros(n, t_horizon), control_traj))
+        control_traj = control_traj[n+1:end, :]
+    end
     Z_planned = zeros(n+m, t_horizon+n_t)
     Z_planned[:, 1:n_t] = Z
-    Z_planned[n+1:end, n_t+1:end] = control_traj
-
-    @show size(Z_planned[n+1:end, n_t+1:end])
-    @show size(control_traj)
-    @show size(U_adjusted)
-    @show size(A_hat)
-    @show size(B_hat)
-    @show size(Z_planned)
+    Z_planned[n+1:end, n_t+1:end] = control_traj[1:m, :]
 
     for i in n_t:(n_t+t_horizon-1)
         Z_planned[1:n, i+1] .= A_hat * Z_planned[1:n, i] + B_hat*Z_planned[n+1:end, i]
         # Z_planned[1:n, n_t + i] = Z_planned[1:n, n_t + i - 1] + A_hat * Z_planned[1:n, n_t + i - 1] + B_hat * control_traj[i, :]
     end
 
-    @show StatsBase.reconstruct(problem.scaler, Z_planned)[n+1:end, end-1:end]
     return Z_planned
     # return U_adjusted, A_opt, phi_opt_adjusted, ts, T, M, n_i, ωs, P
 end

@@ -49,8 +49,8 @@ function compute_objective(Z::Matrix{Float64}, n::Int64)
     return obj
 end
 
-function run_experiments()
-    problem = problem_setup()
+function run_f16_experiments()
+    problem = f16_problem_setup()
 
     ccp_data = SimData(problem, Vector{Float64}(), Vector{Float64}(), Vector{Float64}(), Vector{Matrix{Float64}}())
     ccp_sdp_data = SimData(problem, Vector{Float64}(), Vector{Float64}(), Vector{Float64}(), Vector{Matrix{Float64}}())
@@ -67,7 +67,6 @@ function run_experiments()
 
     @showprogress dt=0.5 desc="Running sims..." for i in 1:num_sims
         for method in [ConvexConcave(), ConvexConcaveSDP(), OrthogonalMultisine(), RandomSequence()]
-        # for method in [ConvexConcave(), ConvexConcaveSDP()]
             Z_planned, runtime, times_actual, Z_actual = nothing, nothing, nothing, nothing
 
             attempts = 0
@@ -111,14 +110,76 @@ function run_experiments()
         sleep(0.1)
     end
 
-    JLD2.save("ccp_sdp_data.jld2", "ccp_sdp_data", ccp_sdp_data)
-    JLD2.save("ccp_data.jld2", "ccp_data", ccp_data)
-    JLD2.save("orthog_data.jld2", "orthog_data", orthog_data)
-    JLD2.save("random_data.jld2", "random_data", random_data)
+    data_path = joinpath(@__DIR__, "..", "data", "f16")
+    JLD2.save(data_path * "/ccp_sdp_data.jld2", "ccp_sdp_data", ccp_sdp_data)
+    JLD2.save(data_path * "/ccp_data.jld2", "ccp_data", ccp_data)
+    JLD2.save(data_path * "/orthog_data.jld2", "orthog_data", orthog_data)
+    JLD2.save(data_path * "/random_data.jld2", "random_data", random_data)
+end
+
+function run_cylinder_experiments()
+    problem, U_hat = cylinder_problem_setup(return_data=true)
+
+    ccp_data = SimData(problem, Vector{Float64}(), Vector{Float64}(), Vector{Float64}(), Vector{Matrix{Float64}}())
+    ccp_sdp_data = SimData(problem, Vector{Float64}(), Vector{Float64}(), Vector{Float64}(), Vector{Matrix{Float64}}())
+    orthog_data = SimData(problem, Vector{Float64}(), Vector{Float64}(), Vector{Float64}(), Vector{Matrix{Float64}}())
+    random_data = SimData(problem, Vector{Float64}(), Vector{Float64}(), Vector{Float64}(), Vector{Matrix{Float64}}())
+
+    # run each method once first to compile
+    solve(problem, ConvexConcave());
+    solve(problem, ConvexConcaveSDP());
+    solve(problem, OrthogonalMultisine());
+    solve(problem, RandomSequence());
+
+    num_sims = 10#100
+
+    @showprogress dt=0.5 desc="Running sims..." for i in 1:num_sims
+        for method in [ConvexConcave(), ConvexConcaveSDP(), OrthogonalMultisine(), RandomSequence()]
+            Z_planned, runtime, times_actual, Z_actual = nothing, nothing, nothing, nothing
+
+            Z_planned, runtime = @timed solve(problem, method)
+
+            # Unnormalize the data
+            Z_planned_proj_up = vcat(InputOptimization.project_up(Z_planned[1:end-1, :], U_hat), Z_planned[end, :]')
+            Z_planned_unscaled = StatsBase.reconstruct(problem.scaler, Z_planned_proj_up)
+
+            # Execute the actual simulation using the planned inputs
+            sigmas_actual, times_actual, ωs_actual = run_cylinder_planned_inputs(Z_planned_unscaled[end, :])
+
+            states_actual = Matrix(hcat([vec(sigmas_actual[i]) for i in 1:length(sigmas_actual)]...)')
+            controls_actual = Z_planned_unscaled[end, :]
+            Z_actual = Matrix(hcat(states_actual, controls_actual)')
+            Z_actual_scaled = StatsBase.transform(problem.scaler, Z_actual)
+            Z_actual_scaled[isnan.(Z_actual_scaled)] .= 0 # set NaNs to 0
+            Z_actual_proj_down = vcat(InputOptimization.project_down(Z_actual_scaled[1:end-1, :], U_hat), Z_actual_scaled[end, :]')
+
+            if method == ConvexConcave()
+                data = ccp_data
+            elseif method == ConvexConcaveSDP()
+                data = ccp_sdp_data
+            elseif method == OrthogonalMultisine()
+                data = orthog_data
+            else
+                data = random_data
+            end
+
+            data.scaled_objectives = push!(data.scaled_objectives, compute_objective(Z_actual_proj_down, problem.n))
+            data.runtimes = push!(data.runtimes, runtime)
+            data.Zs = push!(data.Zs, Z_actual_proj_down)
+        end
+
+        sleep(0.1)
+    end
+
+    data_path = joinpath(@__DIR__, "..", "data", "cylinder")
+    JLD2.save(data_path * "/ccp_sdp_data.jld2", "ccp_sdp_data", ccp_sdp_data)
+    JLD2.save(data_path * "/ccp_data.jld2", "ccp_data", ccp_data)
+    JLD2.save(data_path * "/orthog_data.jld2", "orthog_data", orthog_data)
+    JLD2.save(data_path * "/random_data.jld2", "random_data", random_data)
 end
 
 function make_gifs(t_horizon_mult = 2)
-    problem = problem_setup()
+    problem = f16_problem_setup()
     @show problem.t_horizon
     problem.t_horizon = problem.t_horizon * t_horizon_mult
     @show problem.t_horizon

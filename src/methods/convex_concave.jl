@@ -9,11 +9,11 @@ function build_model(safe_bounds::Matrix{Float64}, Z_k::Matrix{Float64}, A_hat::
                      n::Int64, m::Int64, n_t::Int64, t_horizon::Int64, Z_cur::Matrix{Float64}, 
                      Σ::Distributions.PDMats.PDMat{Float64, Matrix{Float64}}, Q::Distributions.PDMats.PDMat{Float64, Matrix{Float64}}, 
                      scaler::UnitRangeTransform{Float64,Vector{Float64}}, delta_maxs::Vector{Float64}, 
-                     method::String, sim::String)
+                     method::String, sim::String, equal_time_constraint::Bool)
     
     if method == "SDP"
         model = Model(Mosek.Optimizer)
-        @variable(model, Y[1:n+m, 1:n+m], PSD)
+        @variable(model, Y[1:n+m, 1:n+m], Symmetric)
     else
         model = Model(Gurobi.Optimizer)
     end
@@ -35,9 +35,9 @@ function build_model(safe_bounds::Matrix{Float64}, Z_k::Matrix{Float64}, A_hat::
         @objective(model, Min, tr(Y))
         @constraint(model, [Y Diagonal(ones(n + m)); Diagonal(ones(n + m)) W_hat] >= 0, PSDCone())
         # Set MOSEK tolerances
-        set_attribute(model, "INTPNT_CO_TOL_PFEAS", 1e-4)
-        set_attribute(model, "INTPNT_CO_TOL_DFEAS", 1e-4)   
-        set_attribute(model, "INTPNT_CO_TOL_MU_RED", 1e-4)
+        # set_attribute(model, "INTPNT_CO_TOL_PFEAS", 1e-4)
+        # set_attribute(model, "INTPNT_CO_TOL_DFEAS", 1e-4)   
+        # set_attribute(model, "INTPNT_CO_TOL_MU_RED", 1e-4)
     else
         @objective(model, Min, -tr(W_hat))
     end
@@ -49,7 +49,7 @@ function build_model(safe_bounds::Matrix{Float64}, Z_k::Matrix{Float64}, A_hat::
     # Dynamics and control constraints
     for i in n_t:(n_t+t_horizon-1)
         @constraint(model, Z[1:n, i+1] .== A_hat * Z[1:n, i] + B_hat * Z[n+1:end, i]) # Dynamics
-        @constraint(model, Z[n+1:end, i+1] - Z[n+1:end, i] .<= delta_maxs) # Control variation
+        @constraint(model, Z[n+1:end, i] - Z[n+1:end, i+1] .<= delta_maxs) # Control variation
         @constraint(model, Z[n+1:end, i] - Z[n+1:end, i+1] .>= -delta_maxs)
     end
 
@@ -69,8 +69,11 @@ function build_model(safe_bounds::Matrix{Float64}, Z_k::Matrix{Float64}, A_hat::
 
 
     # spend equal amount of time on either side of control input
-    # @constraint(model, sum(Z[n+1:end, n_t+1:end] .- Z[n+1:end, n_t]) .== zeros(m))
+    if equal_time_constraint
+        @constraint(model, sum(Z[n+1:end, n_t+1:end] .- Z[n+1:end, n_t]) .== zeros(m))
+    end
     
+    @show valid_indices
     # wₖ, _ = compute_sigma(Z_k, n)
     # Σₖ = wₖ^2 * inv(Z_k * Z_k')
     # β = 1.96
@@ -118,15 +121,34 @@ function plan_control_inputs(problem::InputOptimizationProblem,
     t_horizon = problem.t_horizon
     delta_maxs = problem.delta_maxs
     
-    if method == "SDP"
-        # using random initial Z_cur leads to infeasible Mosek
-        # Z_cur = [Z_k Z_k[:, end] .+ zeros(n+m, t_horizon)]
-        Z_cur = [Z_k Z_k[:, end] .+ rand(problem.rng, Normal(0, 0.05), n + m, t_horizon)]
-        # Z_cur = [Z_k vcat(Z_k[1:n, end] .+ zeros(n, t_horizon), markov_sequence(problem))]
-    else
-        Z_cur = [Z_k Z_k[:, end] .+ rand(problem.rng, Normal(0, 1.0), n + m, t_horizon)]
-        # Z_cur = [Z_k vcat(Z_k[1:n, end] .+ zeros(n, t_horizon), markov_sequence(problem))]
-    end    
+    # if method == "SDP"
+    #     # using random initial Z_cur leads to infeasible Mosek
+    #     # Z_cur = [Z_k Z_k[:, end] .+ zeros(n+m, t_horizon)]
+    #     # Z_cur = [Z_k Z_k[:, end] .+ rand(problem.rng, Normal(0, 0.05), n + m, t_horizon)]
+    #     # Z_cur = [Z_k vcat(Z_k[1:n, end] .+ zeros(n, t_horizon), markov_sequence(problem))]
+    # else
+    #     # Z_cur = [Z_k Z_k[:, end] .+ rand(problem.rng, Normal(0, 1.0), n + m, t_horizon)]
+    #     # Z_cur = [Z_k vcat(Z_k[1:n, end] .+ zeros(n, t_horizon), markov_sequence(problem))]
+    #     # Z_init = [Z_k zeros(n+m, t_horizon)]
+    #     # Z_init[end, n_t+1:end] .= 0.5*(maximum(Z_init[end, 1:n_t]) - minimum(Z_init[end, 1:n_t]))*sin.(0.1 .* range(1, t_horizon, step=1)) .+ Z_init[end, n_t]
+    #     # for t in 1:t_horizon
+    #     #     Z_init[1:n, n_t+t] .= problem.A_hat * Z_init[1:n, n_t+t-1] + problem.B_hat * Z_init[n+1:end, n_t+t-1]
+    #     # end
+    #     # Z_cur = Z_init
+    # end    
+
+    # Feasible point initialization
+    Z_init = [Z_k zeros(n+m, t_horizon)]
+    for i in problem.n+1:problem.n+m
+        A = rand(problem.rng, Normal(0.2, 0.1))*(maximum(Z_init[i, 1:n_t]) - minimum(Z_init[i, 1:n_t]))
+        w = rand(problem.rng, Normal(0.1, 0.05))
+        Z_init[i, n_t+1:end] .= A*sin.(w .* range(1, t_horizon, step=1)) .+ Z_init[i, n_t]
+    end
+    for t in 1:t_horizon
+        Z_init[1:n, n_t+t] .= problem.A_hat * Z_init[1:n, n_t+t-1] + problem.B_hat * Z_init[n+1:end, n_t+t-1]
+    end
+    Z_cur = Z_init
+    
     max_iter = 10
     tol = 1e-3
     obj = Inf
@@ -136,7 +158,7 @@ function plan_control_inputs(problem::InputOptimizationProblem,
     Z_ctrl_val = Nothing 
 
     build_time = time()
-    model = build_model(safe_bounds, Z_k, A_hat, B_hat, n, m, n_t, t_horizon, Z_cur, problem.𝒩.Σ, problem.𝒩.Σ, scaler, delta_maxs, method, sim)
+    model = build_model(safe_bounds, Z_k, A_hat, B_hat, n, m, n_t, t_horizon, Z_cur, problem.𝒩.Σ, problem.𝒩.Σ, scaler, delta_maxs, method, sim, problem.equal_time_constraint)
     build_end_time = time()
     println("Time spent in build_model: ", build_end_time - build_time)
 

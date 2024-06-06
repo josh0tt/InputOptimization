@@ -262,18 +262,45 @@ function markov_sequence(problem::InputOptimizationProblem, p::Float64=0.75)
     for i in 1:m
         for j in 2:len
             U[i, j] = U[i, j-1] + (rand(rng) < p ? 0 : (rand(rng) < 0.5 ? -1 : 1) * problem.delta_maxs[i])
-            # if U[i, j] < problem.safe_bounds[problem.n+i, 1]
-            #     U[i, j] = problem.safe_bounds[problem.n+i, 1]
-            # elseif U[i, j] > problem.safe_bounds[problem.n+i, 2]
-            #     U[i, j] = problem.safe_bounds[problem.n+i, 2]
-            # end
-            if U[i, j] < U_desired[i] - problem.delta_maxs[i]
-                U[i, j] = U_desired[i] - problem.delta_maxs[i]
-            elseif U[i, j] > U_desired[i] + problem.delta_maxs[i]
-                U[i, j] = U_desired[i] + problem.delta_maxs[i]
+
+            if problem.row_names[1] != "cylinder"
+                # Only moving between +- delta max
+                if U[i, j] < U_desired[i] - problem.delta_maxs[i]
+                    U[i, j] = U_desired[i] - problem.delta_maxs[i]
+                elseif U[i, j] > U_desired[i] + problem.delta_maxs[i]
+                    U[i, j] = U_desired[i] + problem.delta_maxs[i]
+                end
+            else
+                # Moving between upper and lower bounds by delta max
+                if U[i, j] < problem.safe_bounds[problem.n+i, 1]
+                    U[i, j] = problem.safe_bounds[problem.n+i, 1]
+                elseif U[i, j] > problem.safe_bounds[problem.n+i, 2]
+                    U[i, j] = problem.safe_bounds[problem.n+i, 2]
+                end
             end
         end
     end
+
+    # moving between upper and lower bounds in saw tooth pattern
+    # for i in 1:m
+    #     increasing = true
+    #     for j in 2:len
+    #         if increasing
+    #             U[i, j] = U[i, j-1] + problem.delta_maxs[i]
+    #             if U[i, j] > problem.safe_bounds[problem.n+i, 2]
+    #                 U[i, j] = problem.safe_bounds[problem.n+i, 2]
+    #                 increasing = false
+    #             end
+    #         else
+    #             U[i, j] = U[i, j-1] - problem.delta_maxs[i]
+    #             if U[i, j] < problem.safe_bounds[problem.n+i, 1]
+    #                 U[i, j] = problem.safe_bounds[problem.n+i, 1]
+    #                 increasing = true
+    #             end
+    #         end
+    #     end
+    # end
+
     return U
 end
 
@@ -314,7 +341,6 @@ function run_random(problem::InputOptimizationProblem)
         # Z_planned[1:n, n_t + i] = Z_planned[1:n, n_t + i - 1] + A_hat * Z_planned[1:n, n_t + i - 1] + B_hat * control_traj[i, :]
     end
 
-    @show StatsBase.reconstruct(problem.scaler, Z_planned)[n+1:end, end-1:end]
     return Z_planned
 end
 

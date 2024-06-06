@@ -34,8 +34,11 @@ struct RandomSequence <: SolutionMethod end
     f_min::Float64                                      # minimum frequency for multisines
     f_max::Float64                                      # maximum frequency for multisines
     row_names::Vector{String}                           # Z row names
+    equal_time_constraint::Bool                         # equal amount of time on either side of control input for ConvexConcave
 end
 
+include("DMDc.jl")
+include("run_cylinder.jl")
 include("run_f16.jl")
 include("setup.jl")
 include("utilities/helpers.jl")
@@ -72,22 +75,19 @@ function solve(problem::InputOptimizationProblem, method::RandomSequence)::Matri
     return Z_planned
 end
 
-# problem = problem_setup()
-# Z_planned = solve(problem, ConvexConcave())
-# # Z_planned = solve(problem, ConvexConcave())
-# # # Z_planned = solve(problem, OrthogonalMultisine())
-
-# times_actual, Z_actual = run_f16_sim(problem, Z_planned)
-# plot(problem, Z_planned, Z_actual, times_actual .+ problem.times[end])
-
 export InputOptimizationProblem
        ConvexConcave, 
        ConvexConcaveSDP, 
        OrthogonalMultisine, 
        RandomSequence, 
        solve,
-       problem_setup,
-       find_max_As,
+       f16_problem_setup,
+       cylinder_problem_setup,
+       CylinderFlowData,
+       DMDc,
+       project_down,
+       project_up,
+       find_max_As, 
        scale_bounds,
        estimate_linear_system,
        fit_process_noise,
@@ -95,7 +95,9 @@ export InputOptimizationProblem
        run_f16_waypoint_sim,
        make_gifs,
        SimData,
-       run_experiments,
-       run_xplane
+       run_f16_experiments,
+       run_xplane,
+       run_cylinder,
+       run_cylinder_planned_inputs
 
 end
