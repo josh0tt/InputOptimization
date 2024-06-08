@@ -13,7 +13,7 @@ include_forces : Bool, optional
     Whether to include forces in the loaded data. Default is `true`.
 
 """
-function load_human_flown_data(safe_bounds::Matrix{Float64}, include_forces::Bool=true, data_path::String="data/short_cessna_data.npz")
+function load_human_flown_data(safe_bounds::Matrix{Float64}, include_forces::Bool=true,     data_path::String=joinpath(@__DIR__, "..", "..", "data", "xplane", "short_cessna_data.npz"))
     state_titles = ["Roll", "Pitch", "Yaw", "Roll Rate", "Pitch Rate", "Yaw Rate", "Vx Acf", "Vy Acf", "Vz Acf", "Alpha"]
     force_titles = ["Cx", "Cy", "Cz", "CL", "CM", "CN"]
     control_titles = ["Elevator", "Aileron", "Rudder", "Throttle"]

@@ -197,7 +197,7 @@ function cylinder_problem_setup(;load_data=true, return_data=false)
     n, m = size(states, 2), size(controls, 2)
     n_t = length(times)
     Δt = times[2] - times[1]
-    t_horizon = round(Int64, 50 / Δt)
+    t_horizon = round(Int64, 25 / Δt)
     Z = Matrix{Float64}(hcat(states, controls)')   
 
     # 3. Normalize the data

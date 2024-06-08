@@ -102,7 +102,8 @@ function run_xplane()
                 n_t = size(Z_k, 2)
 
                 A_hat, B_hat, Z_k, _, execution_times = estimate_linear_system(times, Z_k, t_horizon, start_time, t0, n, m)
-                problem = InputOptimizationProblem(problem.rng, Z_k, scaler, times, A_hat, B_hat, problem.n, problem.m, n_t, problem.t_horizon, mean(diff(execution_times)), problem.safe_bounds, problem.safe_bounds_unscaled, problem.delta_maxs, problem.max_As, problem.f_min, problem.f_max, problem.row_names)
+                𝒩 = InputOptimization.fit_process_noise(Z_k, A_hat, B_hat, n, m)
+                problem = InputOptimizationProblem(problem.rng, Z_k, scaler, times, A_hat, B_hat, 𝒩, problem.n, problem.m, n_t, problem.t_horizon, mean(diff(execution_times)), problem.safe_bounds, problem.safe_bounds_unscaled, problem.delta_maxs, problem.max_As, problem.f_min, problem.f_max, problem.row_names, problem.equal_time_constraint)
                 Z_cur, infeasible_flag = plan_control_inputs(problem, "approx", "xplane")
                 if infeasible_flag
                     @warn("Infeasible problem. Stabilizing aircraft...")    
@@ -186,6 +187,21 @@ function run_xplane()
 
                 # check if planned trajectory is empty
                 if !isempty(planned_times)
+
+                    # # Updating planned trajectory every iteration using dynamics and current state 
+                    # # but control inputs remain the same from previous planning iteration 
+                    # x0 = real_trajs[:, end]
+                    # x = zeros(size(planned_traj))
+                    # x[:, 1] = x0
+                    # for i in 1:size(planned_traj, 2)-1
+                    #     println("Updating planned trajectory for time: ", i)
+                    #     x[1:problem.n, i+1] = problem.A_hat * x[1:problem.n, i] + problem.B_hat * planned_traj[problem.n+1:end, i]
+                    # end
+                    # x[problem.n+1:end, :] = planned_traj[problem.n+1:end, :]
+                    # planned_traj = x
+                    # planned_times = real_times[end] .+ problem.Δt * collect(1:size(planned_traj, 2))
+                    # println("Planned trajectory updated.")
+
                     for i in 1:n_traces
                         plts[i][:x] = planned_times
                         plts[i][:y] = planned_traj[i, :]
@@ -392,8 +408,13 @@ function run_xplane()
     A_hat, B_hat, Z_k, _, execution_times = estimate_linear_system(times, Z_k, t_horizon, start_time, t0, n, m)
     max_As = find_max_As(n, m, StatsBase.reconstruct(scaler, Z_k), safe_bounds_unscaled)
     delta_maxs = 0.01 .* ones(m)
-    problem = InputOptimizationProblem(MersenneTwister(12345), Z_k, scaler, times, A_hat, B_hat, n, m, n_t, t_horizon, mean(diff(times)), safe_bounds, safe_bounds_unscaled, delta_maxs, max_As, 0.1, 1.7, titles)   
+    𝒩 = InputOptimization.fit_process_noise(Z_k, A_hat, B_hat, n, m)
+    problem = InputOptimizationProblem(MersenneTwister(12345), Z_k, scaler, times, A_hat, B_hat, 𝒩, n, m, n_t, t_horizon, mean(diff(times)), safe_bounds, safe_bounds_unscaled, delta_maxs, max_As, 0.1, 1.7, titles, false)   
     _, _ = plan_control_inputs(problem, "approx", "xplane")
+
+    # save problem to file
+    problem_path = joinpath(@__DIR__, "..", "data", "xplane", "xplane_problem.jld2")
+    save(problem_path, "problem", problem)
 
     shared_data = SharedData(FlightData(Z_k, times), PlannedData(Matrix{Float64}(undef,0,0), Vector{Float64}()), t0, start_time)
     
