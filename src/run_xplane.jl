@@ -33,7 +33,7 @@ function run_xplane()
         start_time = shared_data.start_time
 
         Δt = mean(diff(shared_data.flight_data.times))
-        # start low pass filter of time to collect data
+        # start lpf timer to collect data
         data_collection_time = Δt
         i = 0 
         while true
@@ -101,7 +101,6 @@ function run_xplane()
                 times = data_copy.times
                 n_t = size(Z_k, 2)
 
-                println("HERE 1")
                 A_hat, B_hat, Z_k, _, execution_times = estimate_linear_system(times, Z_k, t_horizon, start_time, t0, n, m)
                 problem = InputOptimizationProblem(problem.rng, Z_k, scaler, times, A_hat, B_hat, problem.n, problem.m, n_t, problem.t_horizon, mean(diff(execution_times)), problem.safe_bounds, problem.safe_bounds_unscaled, problem.delta_maxs, problem.max_As, problem.f_min, problem.f_max, problem.row_names)
                 Z_cur, infeasible_flag = plan_control_inputs(problem, "approx", "xplane")
@@ -111,8 +110,6 @@ function run_xplane()
                     control_traj = StatsBase.reconstruct(scaler, vcat(zeros(problem.n, problem.t_horizon), stable_control_traj))[problem.n+1:end, :]'
                 else
                     control_traj = StatsBase.reconstruct(scaler, Z_cur[:, problem.n_t+1:end])[problem.n+1:end, :]'
-                    # control_traj, Z_cur, execution_times, infeasible_flag = plan_control_inputs(safe_bounds, times, Z_k, scaler, start_time, t0, t_horizon, n, m, n_t)
-                    println("HERE 2")
                     lock(lk)
                     try
                         shared_data.planned_data = PlannedData(Z_cur[:, n_t:end], execution_times)
@@ -125,7 +122,6 @@ function run_xplane()
 
                 println("Difference in time:", time() - start_time + t0 - times[end])
 
-                println("HERE 3")
                 for i in 1:size(control_traj, 1)
                     println("Sending control input: $(i) / $(size(control_traj, 1))")
                     execute_time = execution_times[i]
@@ -179,6 +175,14 @@ function run_xplane()
                 planned_times = plot_data_copy.planned_data.planned_times
 
                 n_t = size(real_trajs, 2)
+                if n_t > 500
+                    # save the data to a file
+                    println("Saving data to file...")
+                    data_path = joinpath(@__DIR__, "..", "data", "xplane", "xplane_data.jld2")
+                    save(data_path, "Z_k", real_trajs, "times", real_times)
+                    println("Data saved to file.")
+                    break
+                end
 
                 # check if planned trajectory is empty
                 if !isempty(planned_times)
@@ -233,54 +237,51 @@ function run_xplane()
     t_horizon = 25
     if include_forces
         safe_bounds_unscaled = [-30 30;       # Roll 1
-                    -25 25;          # Pitch 2
-                    -10 10;          # Yaw 3 
-                    -10 10;          # Roll Rate 4 
-                    -10 10;          # Pitch Rate 5
-                    -10 10;          # Yaw Rate 6
-                    -Inf Inf;        # Vx Acf 7
-                    -Inf Inf;        # Vy Acf 8
-                    -80 -40;         # Vz Acf 9
-                    -5 10;           # Alpha 10
-                    -Inf Inf;        # Cx 11
-                    -Inf Inf;        # Cy 12
-                    -Inf Inf;        # Cz 13
-                    -Inf Inf;        # CL 14
-                    -Inf Inf;        # CM 15
-                    -Inf Inf;        # CN 16
-                    -1 1;            # Elevator 17
-                    -1 1;            # Aileron 18
-                    -1 1;            # Rudder 19
-                     0 1]            # Throttle 20
+                    -25 25;                   # Pitch 2
+                    -10 10;                   # Yaw 3 
+                    -10 10;                   # Roll Rate 4 
+                    -10 10;                   # Pitch Rate 5
+                    -10 10;                   # Yaw Rate 6
+                    -Inf Inf;                 # Vx Acf 7
+                    -Inf Inf;                 # Vy Acf 8
+                    -80 -40;                  # Vz Acf 9
+                    -5 10;                    # Alpha 10
+                    -Inf Inf;                 # Cx 11
+                    -Inf Inf;                 # Cy 12
+                    -Inf Inf;                 # Cz 13
+                    -Inf Inf;                 # CL 14
+                    -Inf Inf;                 # CM 15
+                    -Inf Inf;                 # CN 16
+                    -1 1;                     # Elevator 17
+                    -1 1;                     # Aileron 18
+                    -1 1;                     # Rudder 19
+                     0 1]                     # Throttle 20
     else
         safe_bounds_unscaled = [-30 30;       # Roll 1
-                    -25 25;          # Pitch 2
-                    -10 10;          # Yaw 3
-                    -10 10;          # Roll Rate 4
-                    -10 10;          # Pitch Rate 5
-                    -10 10;          # Yaw Rate 6
-                    -Inf Inf;        # Vx Acf 7
-                    -Inf Inf;        # Vy Acf 8
-                    -80 -40;         # Vz Acf 9
-                    -5 10;           # Alpha 10
-                    -1 1;            # Elevator 11
-                    -1 1;            # Aileron 12
-                    -1 1;            # Rudder 13
-                     0 1]            # Throttle 14
+                    -25 25;                   # Pitch 2
+                    -10 10;                   # Yaw 3
+                    -10 10;                   # Roll Rate 4
+                    -10 10;                   # Pitch Rate 5
+                    -10 10;                   # Yaw Rate 6
+                    -Inf Inf;                 # Vx Acf 7
+                    -Inf Inf;                 # Vy Acf 8
+                    -80 -40;                  # Vz Acf 9
+                    -5 10;                    # Alpha 10
+                    -1 1;                     # Elevator 11
+                    -1 1;                     # Aileron 12
+                    -1 1;                     # Rudder 13
+                     0 1]                     # Throttle 14
     end
 
     #################################################################
     # Python Setup
     #################################################################
     pushfirst!(PyVector(pyimport("sys")."path"), "")
-    # pyimport("xplane/xpc3")
 
     py"""
     import sys
     sys.path.append("/../xplane")
     """
-
-    # pyimport("xplane.xpc3")
 
     py"""
     from xplane.xpc3 import *
@@ -326,6 +327,7 @@ function run_xplane()
         Q = 0.5 * rho * (vx**2 + vy**2 + vz**2)
 
         # the following two values are for Cessna 172 and are output from X-plane by going to Developer --> Aircraft Performance --> Find Pitch Stability Derivative
+        # NOTE: these are only required to report the dimensionless coefficients since X-plane doesn't return them automatically.
         Sref = 18.8164      # m^2 (total wing area of the craft, based on all flying surfaces with a dihedral of less than 45 degrees, meaning wings and horizontal stabs but not vertical stabs)
         Cref = 1.13         # m (average mean aerodynamic chord of the craft, based on all flying surfaces with a dihedral of less than 45 degrees, meaning wings and horizontal stabs but not vertical stabs)
 
@@ -354,7 +356,6 @@ function run_xplane()
 
     def load_saved_flight(client):
         print("Switching to X-Plane in 1 second...")
-        # input()
         time.sleep(1)  # Wait for a few seconds to switch to X-Plane
 
         # check if position matches that of stored flight

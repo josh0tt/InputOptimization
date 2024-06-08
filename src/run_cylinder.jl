@@ -113,11 +113,11 @@ function rotation_angle(t)
     return 8*π*sin(0.125*t)
 end
 
-function run_cylinder()
+function run_cylinder(;duration=200)
     # Run the simulation and create the gif
     U = 1.0
     sim, center, radius = rotating_circle(320, 160, rotation_angle, U=U)
-    sigmas, times, ωs = sim_gif!(sim, rotation_angle, center=center, radius=radius, duration=200, step=0.1, clims=(-8, 8), plotbody=true)
+    sigmas, times, ωs = sim_gif!(sim, rotation_angle, center=center, radius=radius, duration=duration, step=0.1, clims=(-8, 8), plotbody=true)
 
     return sigmas, times, ωs
 end

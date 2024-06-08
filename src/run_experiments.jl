@@ -1,8 +1,6 @@
 using JLD2
 using ProgressMeter
 
-# include("InputOptimization.jl")
-
 mutable struct SimData
     problem::InputOptimizationProblem
     scaled_objectives::Vector{Float64}
@@ -131,7 +129,7 @@ function run_cylinder_experiments()
     solve(problem, OrthogonalMultisine());
     solve(problem, RandomSequence());
 
-    num_sims = 10#100
+    num_sims = 50#100
 
     @showprogress dt=0.5 desc="Running sims..." for i in 1:num_sims
         for method in [ConvexConcave(), ConvexConcaveSDP(), OrthogonalMultisine(), RandomSequence()]
@@ -172,10 +170,10 @@ function run_cylinder_experiments()
     end
 
     data_path = joinpath(@__DIR__, "..", "data", "cylinder")
-    JLD2.save(data_path * "/ccp_sdp_data.jld2", "ccp_sdp_data", ccp_sdp_data)
-    JLD2.save(data_path * "/ccp_data.jld2", "ccp_data", ccp_data)
-    JLD2.save(data_path * "/orthog_data.jld2", "orthog_data", orthog_data)
-    JLD2.save(data_path * "/random_data.jld2", "random_data", random_data)
+    JLD2.save(data_path * "/short_ccp_sdp_data.jld2", "ccp_sdp_data", ccp_sdp_data)
+    JLD2.save(data_path * "/short_ccp_data.jld2", "ccp_data", ccp_data)
+    JLD2.save(data_path * "/short_orthog_data.jld2", "orthog_data", orthog_data)
+    JLD2.save(data_path * "/short_random_data.jld2", "random_data", random_data)
 end
 
 function make_gifs(t_horizon_mult = 2)
