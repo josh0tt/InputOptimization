@@ -197,7 +197,7 @@ function cylinder_problem_setup(;load_data=true, return_data=false)
     n, m = size(states, 2), size(controls, 2)
     n_t = length(times)
     Δt = times[2] - times[1]
-    t_horizon = round(Int64, 25 / Δt)
+    t_horizon = round(Int64, 100 / Δt)
     Z = Matrix{Float64}(hcat(states, controls)')   
 
     # 3. Normalize the data
@@ -230,7 +230,7 @@ function cylinder_problem_setup(;load_data=true, return_data=false)
     delta_maxs = [mean(abs.(sines[i, 2:end] - sines[i, 1:end-1])) for i in 1:m]
 
     # 4. create the InputOptimizationProblem
-    problem = InputOptimizationProblem(rng, Z, scaler, times, A_hat, B_hat, 𝒩, n, m, n_t, t_horizon, Δt, safe_bounds, safe_bounds_unscaled, delta_maxs, max_As, f_min, f_max, ["cylinder"], true)
+    problem = InputOptimizationProblem(rng, Z, scaler, times, A_hat, B_hat, 𝒩, n, m, n_t, t_horizon, Δt, safe_bounds, safe_bounds_unscaled, delta_maxs, max_As, f_min, f_max, ["cylinder"], false)
 
     if return_data
         return problem, U_hat
