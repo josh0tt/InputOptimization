@@ -473,33 +473,3 @@ function initialize_plots(safe_bounds::Matrix{Float64}, times::Vector{Float64}, 
 
     return p, plts, layout, plt_t0, n_traces, obj_hist
 end
-
-"""
-    compute_obj_hist(n::Int64, m::Int64, t::Int64, Z_k::Matrix{Float64})
-
-Compute the objective history.
-
-# Arguments
-- `n::Int64`: The number of states.
-- `m::Int64`: The number of control inputs.
-- `t::Int64`: The number of time steps.
-- `Z_k::Matrix{Float64}`: The matrix of observed data.
-
-# Returns
-- `obj_hist::Vector{Float64}`: The objective history as a vector of type `Vector{Float64}`.
-
-"""
-function compute_obj_hist(n::Int64, m::Int64, t::Int64, Z_k::Matrix{Float64})
-    st = 25
-    obj_hist = zeros(t - st)
-    residual_norm_hist = []
-    for i in st:t-1
-        sigma, residual_norm = compute_sigma(Z_k[:, 1:i], n)
-        obj = tr(sigma^(2) * inv(Z_k[:, 1:i-1] * Z_k[:, 1:i-1]'))
-        # obj = log(det(sigma^(2) * inv(Z_k[:, 1:i-1] * Z_k[:, 1:i-1]')))
-        obj_hist[i-st+1] = obj
-        push!(residual_norm_hist, residual_norm)
-    end
-
-    return log.(obj_hist)#, residual_norm_hist
-end
