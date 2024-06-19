@@ -107,7 +107,7 @@ function run_xplane()
                 Z_cur, infeasible_flag = plan_control_inputs(problem, "approx", "xplane")
                 if infeasible_flag
                     @warn("Infeasible problem. Stabilizing aircraft...")    
-                    stable_control_traj = stabilize_aircraft(problem.safe_bounds, problem.times, problem.Z_k, problem.scaler, start_time, t0, problem.t_horizon, problem.n, problem.m, problem.t, problem.A_hat, problem.B_hat, problem.delta_maxs)
+                    stable_control_traj = stabilize_aircraft(problem.safe_bounds, problem.times, Z_k, problem.scaler, start_time, t0, problem.t_horizon, problem.n, problem.m, problem.t, problem.A_hat, problem.B_hat, problem.delta_maxs)
                     control_traj = StatsBase.reconstruct(scaler, vcat(zeros(problem.n, problem.t_horizon), stable_control_traj))[problem.n+1:end, :]'
                 else
                     control_traj = StatsBase.reconstruct(scaler, Z_cur[:, problem.n_t+1:end])[problem.n+1:end, :]'
