@@ -268,8 +268,8 @@ function cylinder_problem_setup(;load_data=true, return_data=false)
 
     # 1. Load cylinder data 
     if load_data
-        # data_path = joinpath(@__DIR__, "..", "data", "cylinder", "cylinder_data.jld2")
-        data_path = joinpath(@__DIR__, "..", "data", "cylinder", "short_cylinder_data.jld2")
+        data_path = joinpath(@__DIR__, "..", "data", "cylinder", "cylinder_data.jld2")
+        # data_path = joinpath(@__DIR__, "..", "data", "cylinder", "short_cylinder_data.jld2")
         cylinder_data = load(data_path)["cylinder_data"]
         sigmas, times, ωs = cylinder_data.sigmas, cylinder_data.times, cylinder_data.ωs
 
