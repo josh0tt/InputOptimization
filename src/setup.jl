@@ -170,6 +170,99 @@ function f16_problem_setup()::InputOptimizationProblem
     return problem
 end
 
+function f16_ground_truth_setup()::InputOptimizationProblem
+    rng = MersenneTwister(123456)
+
+    # 1. run F16 waypoint simulation to collect data set 
+    # we don't need it this smooth, we should just limit how far from the starting init we can go
+    times, states, controls = run_f16_ground_truth_waypoint_sim()
+    n, m = size(states, 2), size(controls, 2)
+    n_t = length(times)
+    Δt = times[2] - times[1]
+    t_horizon = round(Int64, 7 / Δt)
+
+    # 2. scale the data
+    Z_unscaled = Matrix(hcat(states, controls)') # Z is shaped as (n+m,t) where n is the number of states and m is the number of controls
+    scaler = fit(UnitRangeTransform, Z_unscaled, dims=2)
+    Z = StatsBase.transform(scaler, Z_unscaled)
+
+    safe_bounds_unscaled = [
+        Z_unscaled[1, end]-150 Z_unscaled[1, end]+150; # vt ft/s
+        Z_unscaled[2, end]-10 Z_unscaled[2, end]+20; # alpha
+        Z_unscaled[3, end]-10 Z_unscaled[3, end]+10; # beta
+        Z_unscaled[4, end]-30 Z_unscaled[4, end]+30; # phi (roll)
+        Z_unscaled[5, end]-30 Z_unscaled[5, end]+30; # theta (pitch)
+        -180 180; # psi
+        Z_unscaled[7, end]-30 Z_unscaled[7, end]+30; # P
+        Z_unscaled[8, end]-30 Z_unscaled[8, end]+30; # Q
+        Z_unscaled[9, end]-30 Z_unscaled[9, end]+30; # R
+        -Inf Inf; # pn ft
+        -Inf Inf; # pe ft
+        Z_unscaled[12, end]-2000 Z_unscaled[12, end]+2000; # h ft
+        0 100; # pow
+        # -0.5 3; # Nz
+        Z_unscaled[14, end]-0.1 Z_unscaled[14, end]+0.1; # throt
+        Z_unscaled[15, end]-0.5 Z_unscaled[15, end]+0.5; # ele
+        Z_unscaled[16, end]-0.5 Z_unscaled[16, end]+0.5; # ail
+        Z_unscaled[17, end]-0.5 Z_unscaled[17, end]+0.5 # rud
+    ]
+    
+    # equating constraints between ccp and orthogonal multisines
+    max_As = find_max_As(n, m, Z_unscaled, safe_bounds_unscaled)
+    # Update the safe bounds to account for the maximum allowable deviation in control inputs
+    for i in 1:m
+        safe_bounds_unscaled[n+i, 1] = Z_unscaled[n+i, end] - max_As[i]
+        safe_bounds_unscaled[n+i, 2] = Z_unscaled[n+i, end] + max_As[i]
+    end
+    f_min, f_max = 0.1, 1.7 # 0.2, 1.1 # Hz
+    # create m sinuoids using max_As and ω=2*π*f_max
+    sines = max_As .* sin.(2*π*f_max .* times)' # should be m x n_t
+    sines_scaled = StatsBase.transform(scaler, vcat(zeros(n, n_t), sines))
+    sines_scaled = sines_scaled[n+1:end, :]
+    delta_maxs = [mean(abs.(sines_scaled[i, 2:end] - sines_scaled[i, 1:end-1])) for i in 1:m] #[maximum(abs.(sines_scaled[i, 2:end] - sines_scaled[i, 1:end-1])) for i in 1:m]
+    @show delta_maxs
+
+    # scale the bounds as well
+    lower_bounds, upper_bounds = scale_bounds(scaler, safe_bounds_unscaled, 1, n + m)
+    safe_bounds = zeros(size(safe_bounds_unscaled))
+    for i in 1:size(safe_bounds, 1)
+        safe_bounds[i, 1] = lower_bounds[i]
+        safe_bounds[i, 2] = upper_bounds[i]
+    end
+
+    # 3. Dynamic Mode Decomposition with control
+    # DMDc not needed for F16 state space of 13 states and 4 controls
+    dimensionality_reduction = false 
+    if dimensionality_reduction
+        Ω = Z[:, 1:end-1]
+        Xp = Z[1:n, 2:end]
+        A_hat, B_hat, ϕ, W, transform, U_hat = DMDc(Ω, Xp)
+        # now convert the Z data to the new basis
+        Z_full = deepcopy(Z)
+        Z = vcat(project_down(Z[1:n, :], U_hat), Z[n+1:end, :]) # control inputs u are not transformed 
+        # update the safe bounds
+        safe_bounds = vcat(project_down(safe_bounds[1:n, :], U_hat), safe_bounds[n+1:end, :])
+        n = size(A_hat, 1)
+        m = size(B_hat, 2)
+        𝒩 = fit_process_noise(Z, A_hat, B_hat, n, m)
+    else
+        # estimate the linear system
+        A_hat, B_hat = estimate_linear_system(Z, n)
+        Z_full = deepcopy(Z)
+        𝒩 = fit_process_noise(Z, A_hat, B_hat, n, m)
+        ϕ = zeros(n, n_t)
+        W = zeros(n, n_t)
+        transform = zeros(n, n)
+        U_hat = zeros(n, n)
+    end
+
+    # 4. create the InputOptimizationProblem
+    problem = InputOptimizationProblem(rng, Z, scaler, times, A_hat, B_hat, 𝒩, n, m, n_t, t_horizon, Δt, safe_bounds, safe_bounds_unscaled, delta_maxs, max_As, f_min, f_max, ["vt", "alpha", "beta", "phi", "theta", "psi", "P", "Q", "R", "pn", "pe", "h", "pow", "throt", "ele", "ail", "rud"], false)
+
+    return problem
+end
+
+
 function cylinder_problem_setup(;load_data=true, return_data=false)
     rng = MersenneTwister(123456)
 
