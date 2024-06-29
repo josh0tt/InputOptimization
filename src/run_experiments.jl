@@ -1,5 +1,7 @@
 using JLD2
 using ProgressMeter
+using Kronecker
+using LinearAlgebra
 
 mutable struct SimData
     problem::InputOptimizationProblem
@@ -42,8 +44,14 @@ end
 
 function compute_objective(Z::Matrix{Float64}, n::Int64)
     sigma, residual_norm = compute_sigma(Z, n)
-    obj = tr(sigma^(2) * inv(Z * Z'))
+    # obj = tr(sigma^(2) * inv(Z * Z'))
     # obj = log(det(sigma^(2) * inv(Z[:, 1:i-1] * Z[:, 1:i-1]')))
+
+    Γ = (sigma^2) * inv(Z*Z')
+    I_n = Diagonal(ones(n))
+    CovΘ = kron(I_n, Γ)
+    obj = tr(CovΘ)
+
     return obj
 end
 

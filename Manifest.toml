@@ -2,7 +2,7 @@
 
 julia_version = "1.9.0"
 manifest_format = "2.0"
-project_hash = "014fd51cb84dd4e7b436ef3073ff71e005489eba"
+project_hash = "05c6a02e000d15057203e79e16c6b75850a892bc"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "016833eb52ba2d6bea9fcb50ca295980e728ee24"
@@ -1096,6 +1096,12 @@ weakdeps = ["EnzymeCore"]
     [deps.KernelAbstractions.extensions]
     EnzymeExt = "EnzymeCore"
 
+[[deps.Kronecker]]
+deps = ["LinearAlgebra", "NamedDims", "SparseArrays", "StatsBase"]
+git-tree-sha1 = "9253429e28cceae6e823bec9ffde12460d79bb38"
+uuid = "2c470bb0-bcc8-11e8-3dad-c9649493f05e"
+version = "0.5.5"
+
 [[deps.Krylov]]
 deps = ["LinearAlgebra", "Printf", "SparseArrays"]
 git-tree-sha1 = "267dad6b4b7b5d529c76d40ff48d33f7e94cb834"
@@ -1560,6 +1566,25 @@ deps = ["PrettyPrint"]
 git-tree-sha1 = "1a0fa0e9613f46c9b8c11eee38ebb4f590013c5e"
 uuid = "71a1bf82-56d0-4bbc-8a3c-48b961074391"
 version = "0.1.5"
+
+[[deps.NamedDims]]
+deps = ["LinearAlgebra", "Pkg", "Statistics"]
+git-tree-sha1 = "90178dc801073728b8b2d0d8677d10909feb94d8"
+uuid = "356022a1-0364-5f58-8944-0da4b18d706f"
+version = "1.2.2"
+
+    [deps.NamedDims.extensions]
+    AbstractFFTsExt = "AbstractFFTs"
+    ChainRulesCoreExt = "ChainRulesCore"
+    CovarianceEstimationExt = "CovarianceEstimation"
+    TrackerExt = "Tracker"
+
+    [deps.NamedDims.weakdeps]
+    AbstractFFTs = "621f4979-c628-5d54-868e-fcf4e3e8185c"
+    ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
+    CovarianceEstimation = "587fd27a-f159-11e8-2dae-1979310e6154"
+    Requires = "ae029012-a4dd-5104-9daa-d747884805df"
+    Tracker = "9f7883ad-71c0-57eb-9f7f-b5c9e6d3789c"
 
 [[deps.NetworkOptions]]
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"

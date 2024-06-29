@@ -16,7 +16,8 @@ struct RandomSequence <: SolutionMethod end
 
 @with_kw mutable struct InputOptimizationProblem
     rng::MersenneTwister                                # random number generator
-    Z::Matrix{Float64}                                  # (n+m) x t observed data
+    Z::Matrix{Float64}                                  # (n+m) x k observed data
+    X′::Matrix{Float64}                                 # n x k state data
     scaler::UnitRangeTransform{Float64,Vector{Float64}} # scaler used to scale the data
     times::Vector{Float64}                              # t x 1 times at which data is observed
     A_hat::Matrix{Float64}                              # n x n estimated state matrix

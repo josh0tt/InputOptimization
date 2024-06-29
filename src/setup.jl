@@ -79,7 +79,7 @@ The function returns the `InputOptimizationProblem` object.
 
 """
 function f16_problem_setup()::InputOptimizationProblem
-    rng = MersenneTwister(123456)
+    rng = MersenneTwister(123456789)
 
     # 1. run F16 waypoint simulation to collect data set 
     # we don't need it this smooth, we should just limit how far from the starting init we can go
@@ -87,10 +87,10 @@ function f16_problem_setup()::InputOptimizationProblem
     n, m = size(states, 2), size(controls, 2)
     n_t = length(times)
     Δt = times[2] - times[1]
-    t_horizon = round(Int64, 7 / Δt)
+    t_horizon = round(Int64, 7.0 / Δt)
 
     # 2. scale the data
-    Z_unscaled = Matrix(hcat(states, controls)') # Z is shaped as (n+m,t) where n is the number of states and m is the number of controls
+    Z_unscaled = Matrix(hcat(states, controls)') # Z is shaped as (n+m,t) where n is the number of states and m is the number of controls    
     scaler = fit(UnitRangeTransform, Z_unscaled, dims=2)
     Z = StatsBase.transform(scaler, Z_unscaled)
 
@@ -109,10 +109,26 @@ function f16_problem_setup()::InputOptimizationProblem
         Z_unscaled[12, end]-2000 Z_unscaled[12, end]+2000; # h ft
         0 100; # pow
         # -0.5 3; # Nz
-        Z_unscaled[14, end]-0.1 Z_unscaled[14, end]+0.1; # throt
-        Z_unscaled[15, end]-0.5 Z_unscaled[15, end]+0.5; # ele
-        Z_unscaled[16, end]-0.5 Z_unscaled[16, end]+0.5; # ail
-        Z_unscaled[17, end]-0.5 Z_unscaled[17, end]+0.5 # rud
+        # minimum(Z_unscaled[14, :]) maximum(Z_unscaled[14, :]); # throt
+        # the bounds that worked for large scale:
+        # 0 1.0; # throt
+        # minimum(Z_unscaled[15, :]) maximum(Z_unscaled[15, :]); # ele
+        # minimum(Z_unscaled[16, :]) maximum(Z_unscaled[16, :]); # ail
+        # minimum(Z_unscaled[17, :]) maximum(Z_unscaled[17, :]); # rud
+        # Z_unscaled[14, end]-0.1 Z_unscaled[14, end]+0.5; # throt
+        # Z_unscaled[15, end]-2.0 Z_unscaled[15, end]+2.0; # ele
+        # Z_unscaled[16, end]-2.0 Z_unscaled[16, end]+2.0; # ail
+        # Z_unscaled[17, end]-2.0 Z_unscaled[17, end]+2.0 # rud
+        ########################################################
+        0 Z_unscaled[14, end]+0.5; # throt
+        Z_unscaled[15, end]-1 Z_unscaled[15, end]+1; # ele
+        Z_unscaled[16, end]-1 Z_unscaled[16, end]+1; # ail
+        Z_unscaled[17, end]-1 Z_unscaled[17, end]+1 # rud
+        ########################################################
+        # 0 Z_unscaled[14, end]+0.1; # throt
+        # Z_unscaled[15, end]-0.5 Z_unscaled[15, end]+0.5; # ele
+        # Z_unscaled[16, end]-0.5 Z_unscaled[16, end]+0.5; # ail
+        # Z_unscaled[17, end]-0.5 Z_unscaled[17, end]+0.5 # rud
     ]
     
     # equating constraints between ccp and orthogonal multisines
@@ -165,7 +181,11 @@ function f16_problem_setup()::InputOptimizationProblem
     end
 
     # 4. create the InputOptimizationProblem
-    problem = InputOptimizationProblem(rng, Z, scaler, times, A_hat, B_hat, 𝒩, n, m, n_t, t_horizon, Δt, safe_bounds, safe_bounds_unscaled, delta_maxs, max_As, f_min, f_max, ["vt", "alpha", "beta", "phi", "theta", "psi", "P", "Q", "R", "pn", "pe", "h", "pow", "throt", "ele", "ail", "rud"], false)
+    X′ = Z[1:n, 2:end]
+    Z = Z[:, 1:end-1]
+    times = times[1:end-1]
+    n_t = length(times)
+    problem = InputOptimizationProblem(rng, Z, X′, scaler, times, A_hat, B_hat, 𝒩, n, m, n_t, t_horizon, Δt, safe_bounds, safe_bounds_unscaled, delta_maxs, max_As, f_min, f_max, ["vt", "alpha", "beta", "phi", "theta", "psi", "P", "Q", "R", "pn", "pe", "h", "pow", "throt", "ele", "ail", "rud"], false)
 
     return problem
 end
@@ -257,7 +277,11 @@ function f16_ground_truth_setup()::InputOptimizationProblem
     end
 
     # 4. create the InputOptimizationProblem
-    problem = InputOptimizationProblem(rng, Z, scaler, times, A_hat, B_hat, 𝒩, n, m, n_t, t_horizon, Δt, safe_bounds, safe_bounds_unscaled, delta_maxs, max_As, f_min, f_max, ["vt", "alpha", "beta", "phi", "theta", "psi", "P", "Q", "R", "pn", "pe", "h", "pow", "throt", "ele", "ail", "rud"], false)
+    X′ = Z[1:n, 2:end]
+    Z = Z[:, 1:end-1]
+    times = times[1:end-1]
+    n_t = length(times)
+    problem = InputOptimizationProblem(rng, Z, X′, scaler, times, A_hat, B_hat, 𝒩, n, m, n_t, t_horizon, Δt, safe_bounds, safe_bounds_unscaled, delta_maxs, max_As, f_min, f_max, ["vt", "alpha", "beta", "phi", "theta", "psi", "P", "Q", "R", "pn", "pe", "h", "pow", "throt", "ele", "ail", "rud"], false)
 
     return problem
 end
@@ -323,7 +347,11 @@ function cylinder_problem_setup(;load_data=true, return_data=false)
     delta_maxs = [mean(abs.(sines[i, 2:end] - sines[i, 1:end-1])) for i in 1:m]
 
     # 4. create the InputOptimizationProblem
-    problem = InputOptimizationProblem(rng, Z, scaler, times, A_hat, B_hat, 𝒩, n, m, n_t, t_horizon, Δt, safe_bounds, safe_bounds_unscaled, delta_maxs, max_As, f_min, f_max, ["cylinder"], false)
+    X′ = Z[1:n, 2:end]
+    Z = Z[:, 1:end-1]
+    times = times[1:end-1]
+    n_t = length(times)
+    problem = InputOptimizationProblem(rng, Z, X′, scaler, times, A_hat, B_hat, 𝒩, n, m, n_t, t_horizon, Δt, safe_bounds, safe_bounds_unscaled, delta_maxs, max_As, f_min, f_max, ["cylinder"], false)
 
     if return_data
         return problem, U_hat
