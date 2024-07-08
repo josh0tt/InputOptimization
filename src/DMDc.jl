@@ -45,15 +45,17 @@ function DMDc(Ω, Xp, retained_energy = 0.99; num_modes_override = nothing)
     ϕ =  new_U_hat * W
     transform = pinv(new_U_hat)
 
-    return A, B, ϕ, W, transform, new_U_hat
+    return A, B, ϕ, W, transform, U_hat#new_U_hat
 end
 
 function project_down(data::Matrix{Float64}, U_hat::Matrix{Float64})
+    # x̃ = Û' * x
     data_reduced = U_hat' * data
     return data_reduced
 end
 
 function project_up(data_reduced::Matrix{Float64}, U_hat::Matrix{Float64})
+    # x = Û * x̃
     data = U_hat * data_reduced
     return data
 end

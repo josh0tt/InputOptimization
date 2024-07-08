@@ -350,11 +350,13 @@ function cylinder_problem_setup(;load_data=true, return_data=false)
     X′ = Z[1:n, 2:end]
     Z = Z[:, 1:end-1]
     times = times[1:end-1]
+    sigmas = sigmas[1:end-1]
+    ωs = ωs[1:end-1]
     n_t = length(times)
     problem = InputOptimizationProblem(rng, Z, X′, scaler, times, A_hat, B_hat, 𝒩, n, m, n_t, t_horizon, Δt, safe_bounds, safe_bounds_unscaled, delta_maxs, max_As, f_min, f_max, ["cylinder"], false)
 
     if return_data
-        return problem, U_hat
+        return problem, ϕ, W, transform, U_hat, sigmas, times, ωs
     else
         return problem
     end
