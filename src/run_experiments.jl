@@ -240,8 +240,8 @@ function run_cylinder_experiments()
 
     num_sims = 50
 
-    @showprogress dt=0.5 desc="Running sims..." for i in 1:num_sims
-        Threads.@threads for method in [ConvexConcave(), ConvexConcaveSDP(), OrthogonalMultisine(), RandomSequence()]
+    @showprogress dt=0.5 desc="Running sims..." Threads.@threads for i in 1:num_sims
+        for method in [ConvexConcave(), ConvexConcaveSDP(), OrthogonalMultisine(), RandomSequence()]
             Z_planned, runtime, times_actual, Z_actual = nothing, nothing, nothing, nothing
 
             Z_planned, runtime = @timed solve(problem, method)
