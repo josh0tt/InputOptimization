@@ -1,6 +1,6 @@
 # Input Optimization
-<h3>Embedded YouTube Video</h3>
-<iframe width="560" height="315" src="https://www.youtube.com/watch?v=hpQK-EyVLx4&list=PLEkwz33miFSsJfw4MfZdJcVMX79RrEs--&index=6" frameborder="0" allowfullscreen></iframe>
+A video describing our work can be found [here](https://www.youtube.com/watch?v=hpQK-EyVLx4&list=PLEkwz33miFSsJfw4MfZdJcVMX79RrEs--&index=6).
+
 
 Demonstrations of our method in three different simulation environments: 
 1) [WaterLily.jl](https://github.com/weymouth/WaterLily.jl)
