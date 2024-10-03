@@ -1,4 +1,4 @@
-[![arXiv](https://img.shields.io/badge/InputOptimization:%20arXiv-2306.00249-b31b1b.svg)](https://arxiv.org/abs/2409.13088)
+[![arXiv](https://img.shields.io/badge/InputOptimization:%20arXiv-2409.13088-b31b1b.svg)](https://arxiv.org/abs/2409.13088)
 
 # Input Optimization
 A video describing our work can be found [here](https://www.youtube.com/watch?v=hpQK-EyVLx4&list=PLEkwz33miFSsJfw4MfZdJcVMX79RrEs--&index=6).
